@@ -17,10 +17,9 @@ WORKDIR /app
 
 # Copy Python project files
 COPY agent-runtime/pyproject.toml ./
+COPY agent-runtime/app ./app
 # uv.lock is optional at build time — generated on first sync
 RUN uv sync --no-dev 2>/dev/null || uv sync
-
-COPY agent-runtime/app ./app
 
 # Create required directories
 RUN mkdir -p /memory /storage/received /workspace

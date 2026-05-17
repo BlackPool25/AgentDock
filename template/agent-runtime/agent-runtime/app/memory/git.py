@@ -12,19 +12,14 @@ class GitManager:
         self.repo_path = repo_path
 
     def init(self) -> None:
+        import subprocess
         git_dir = self.repo_path / ".git"
         if not git_dir.exists():
-            import subprocess
             subprocess.run(["git", "init"], cwd=self.repo_path, check=True, capture_output=True)
-            subprocess.run(
-                ["git", "config", "user.email", "agent@agentdock"],
-                cwd=self.repo_path, check=True, capture_output=True,
-            )
-            subprocess.run(
-                ["git", "config", "user.name", "AgentDock"],
-                cwd=self.repo_path, check=True, capture_output=True,
-            )
             log.info("git_init", path=str(self.repo_path))
+        # Always ensure git user config is set (needed in Docker named volumes)
+        subprocess.run(["git", "config", "user.email", "agent@agentdock"], cwd=self.repo_path, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "AgentDock"], cwd=self.repo_path, capture_output=True)
 
     async def commit(self, filename: str | None = None, message: str | None = None) -> None:
         ts = datetime.now(timezone.utc).isoformat()

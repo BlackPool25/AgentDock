@@ -22,6 +22,7 @@ const WorkflowSchema = z.object({
       contains: z.string().optional(),
       check_interval_seconds: z.number().optional(),
       file_pattern: z.string().optional(),
+      action_filter: z.string().optional(),  // only fire task_completion for this action name
     }),
   })).default([]),
 });

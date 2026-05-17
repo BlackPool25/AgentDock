@@ -86,7 +86,7 @@ What the builder produces. A complete Docker Compose project — with its own or
 git clone https://github.com/your-org/agentdock
 cd agentdock
 cp .env.example .env
-# Edit .env — set JWT_SECRET (min 32 chars)
+# Edit .env — set JWT_SECRET (min 32 chars) and ADMIN_PASSWORD
 docker compose -f docker/builder.docker-compose.yml up -d
 ```
 
@@ -140,6 +140,7 @@ The runtime is API-only (no UI). It exposes a single public surface: the orchest
 - **Only the orchestrator is public**. Agent containers never expose host ports.
 - Every agent endpoint is proxied through `http://localhost:4000/api/agents/{id}/...`.
 - The `expose` list in each agent config controls what is accessible (status, logs, memory, chat, tasks).
+- Endpoints not in `expose[]` return `403 Forbidden` — the orchestrator enforces this before proxying.
 - Update `expose` in the builder UI, regenerate, or hot-edit the YAML and reload the agent.
 
 ---
@@ -188,6 +189,30 @@ docker compose up --build
 
 ---
 
+## Builder API Reference
+
+All builder API endpoints are on port 3001.
+
+```bash
+# Auth
+POST /api/auth/login              → { token, expiresIn }
+GET  /api/auth/me                 → { sub, email }   (requires JWT)
+
+# System designs (all require JWT)
+GET    /api/systems               → list all saved systems
+POST   /api/systems               → create new system
+GET    /api/systems/:id           → get system with canvasState
+PUT    /api/systems/:id           → update system (saves canvas, increments version)
+DELETE /api/systems/:id           → delete system + all generations
+
+# Generation
+GET  /api/systems/:id/generations          → list generation history
+POST /api/systems/:id/generate             → generate zip → streams download
+GET  /api/systems/:id/generations/:genId   → re-download a previous generation
+```
+
+---
+
 ## Generated Runtime API
 
 All agent endpoints are proxied through the orchestrator (port 4000) and gated by the `expose[]` config.
@@ -200,7 +225,7 @@ GET  http://localhost:4000/health
 GET  http://localhost:4000/api/system/status
 Authorization: Bearer {jwt}
 
-# Agent endpoints (gated by expose[] config)
+# Agent endpoints (gated by expose[] config + JWT)
 GET  http://localhost:4000/api/agents/{id}/status    # requires expose: status
 GET  http://localhost:4000/api/agents/{id}/logs      # requires expose: logs
 GET  http://localhost:4000/api/agents/{id}/memory    # requires expose: memory
@@ -211,7 +236,7 @@ GET  http://localhost:4000/api/agents/{id}/tasks     # requires expose: tasks
 POST http://localhost:4000/api/agents/{id}/reload
 Authorization: Bearer {jwt}
 
-# Webhook trigger
+# Webhook trigger (public — no JWT required)
 POST http://localhost:4000/webhooks/{agent-id}
 Content-Type: application/json
 {"instruction": "Do something", "payload": {...}}
@@ -287,6 +312,17 @@ tools:
   python_packages: ["requests", "beautifulsoup4"]
   system_packages: []
 
+# Named actions this agent can execute when triggered.
+# The task_receiver picks the best matching action based on the incoming instruction.
+actions:
+  - name: analyse_topic
+    description: Research and analyse the given topic
+    prompt_template: |
+      Research and analyse: {{input.topic}}
+      Depth: {{input.depth}}
+      Provide executive summary, key findings, and evidence.
+    output_file: analysis.md   # written to /memory and fires file_received triggers
+
 triggers:
   - type: "task"           # receives tasks from orchestrator/other agents
   - type: "cron"
@@ -298,9 +334,40 @@ expose:
   - status
   - memory
   - chat
+  - tasks
 
 ports:
   internal: 8080
+```
+
+### Workflow Trigger Types
+
+```yaml
+connections:
+  # Task completion — fires when source agent completes any task
+  - trigger:
+      type: task_completion
+      pass_output: true
+      # Optional: only fire when source agent completed a specific action
+      action_filter: dispatch_research
+
+  # File received — fires when source agent writes a matching file to memory
+  - trigger:
+      type: file_received
+      file_pattern: "analysis.md"
+
+  # Cron — fires on schedule
+  - trigger:
+      type: cron
+      schedule: "0 9 * * 1-5"
+      timezone: "UTC"
+
+  # Memory condition — polls source agent memory for a string match
+  - trigger:
+      type: memory_condition
+      file: "state.md"
+      contains: "status: completed"
+      check_interval_seconds: 30
 ```
 
 ---
@@ -310,7 +377,7 @@ ports:
 ```
 AgentDock/
 ├── apps/
-│   ├── builder-api/           # Builder backend — Bun/Hono, SQLite, generator
+│   ├── builder-api/           # Builder backend — Bun/Hono, SQLite/Drizzle, generator
 │   └── builder-ui/            # Builder frontend — React/Vite, React Flow canvas
 ├── packages/
 │   ├── config-schema/         # Zod schemas: SystemDesign, AgentDesign, YAML configs
@@ -363,10 +430,22 @@ Configure in the generated system's `.env`:
 - [x] Phase 3 — Builder UI (React Flow canvas, agent config panels, system library, generate flow)
 - [x] Phase 4 — Template runtime (orchestrator, llm-gateway, agent-runtime, Dockerfiles)
 - [x] Phase 5 — Docker compose (builder production + dev)
-- [ ] Phase 6 — Agent runtime implementation (FastAPI routes, memory, git, shell, MCP, LLM client)
-- [ ] Phase 7 — LLM Gateway implementation (BullMQ workers, all provider adapters)
-- [ ] Phase 8 — End-to-end integration test
-- [ ] Phase 9 — Polish (error handling, structured logging, full docs)
+- [x] Phase 6 — Agent runtime implementation (FastAPI routes, memory, git, shell, MCP, LLM client, action dispatch)
+- [x] Phase 7 — LLM Gateway implementation (BullMQ workers, all provider adapters)
+- [x] Phase 8 — End-to-end integration (3-agent pipeline verified: webhook → coordinator → analyst → report-writer → coordinator)
+- [ ] Phase 9 — Polish (structured logging to WebSocket, full docs, error handling consistency)
+
+### Known Working
+
+- Builder API: JWT auth on all protected routes including `/api/auth/me`
+- Builder API: System CRUD, versioned generations, zip download
+- Generated runtime: Full 3-agent pipeline with `task_completion`, `file_received` triggers
+- Generated runtime: `action_filter` on `task_completion` prevents pipeline loops
+- Generated runtime: Agent proxy strips `Authorization` header (prevents JWT rejection at agents)
+- Generated runtime: Agent `expose[]` gating — unexposed endpoints return 403
+- Generated runtime: Task tracking, logs, `currentTask`/`lastActivity` in status
+- Generated runtime: Action dispatch — agents pick correct action from config, write `output_file`, fire `file_received` triggers
+- Generated runtime: Git memory commits work correctly in Docker named volumes
 
 ---
 

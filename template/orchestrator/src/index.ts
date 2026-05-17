@@ -48,7 +48,7 @@ app.post("/internal/events", async (c) => {
   wsHub.broadcast({ ...event, systemId: SYSTEM_ID, timestamp: new Date().toISOString() });
 
   if (event.type === "agent:task:completed" && event.taskId && event.output) {
-    await handleTaskCompletion(event.agentId, event.taskId, event.output as string, config.workflow);
+    await handleTaskCompletion(event.agentId, event.taskId, event.output as string, config.workflow, event.actionName as string | undefined);
   }
 
   if (event.type === "agent:memory:written" && event.filename && event.content !== undefined) {

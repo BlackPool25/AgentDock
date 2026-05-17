@@ -80,7 +80,7 @@ export const ConnectionDesignSchema = z.object({
   // Field-level data mapping from source output to target input
   dataMapping: DataMappingSchema,
   trigger: z.discriminatedUnion("type", [
-    z.object({ type: z.literal("task_completion"), passOutput: z.boolean().default(true) }),
+    z.object({ type: z.literal("task_completion"), passOutput: z.boolean().default(true), actionFilter: z.string().optional() }),
     z.object({
       type: z.literal("cron"),
       cronSchedule: z.string(),

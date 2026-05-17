@@ -12,6 +12,22 @@ router = APIRouter()
 _start_time = time.time()
 AGENT_ID = os.environ.get("AGENT_ID", "unknown")
 
+# In-memory log buffer (ring buffer, last 500 entries)
+_log_buffer: list[dict[str, Any]] = []
+_MAX_LOGS = 500
+
+
+def _capture_log(level: str, message: str, **kwargs: Any) -> None:
+    import time as _time
+    _log_buffer.append({
+        "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
+        "level": level,
+        "message": message,
+        **kwargs,
+    })
+    if len(_log_buffer) > _MAX_LOGS:
+        _log_buffer.pop(0)
+
 
 def get_state(request: Request) -> Any:
     return request.app.state
@@ -28,12 +44,13 @@ async def health() -> dict[str, Any]:
 async def status(request: Request) -> dict[str, Any]:
     s = get_state(request)
     files = await s.memory.list_files()
+    tr = s.task_receiver
     return {
         "agentId": AGENT_ID,
         "status": "running",
-        "currentTask": None,
+        "currentTask": tr._current_task,
         "memoryFiles": [f.filename for f in files],
-        "lastActivity": None,
+        "lastActivity": tr._last_activity,
         "uptime": time.time() - _start_time,
     }
 
@@ -41,7 +58,13 @@ async def status(request: Request) -> dict[str, Any]:
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 @router.get("/logs")
 async def logs(limit: int = 100, level: str = "info") -> dict[str, Any]:
-    return {"logs": [], "agentId": AGENT_ID}
+    level_order = {"debug": 0, "info": 1, "warning": 2, "error": 3}
+    min_level = level_order.get(level.lower(), 1)
+    filtered = [
+        entry for entry in _log_buffer
+        if level_order.get(entry.get("level", "info").lower(), 1) >= min_level
+    ]
+    return {"logs": filtered[-limit:], "agentId": AGENT_ID}
 
 
 # ─── Memory ───────────────────────────────────────────────────────────────────
@@ -80,13 +103,16 @@ async def receive_task(request: Request) -> dict[str, Any]:
     s = get_state(request)
     body = await request.json()
     payload = TaskPayload.model_validate(body)
+    _capture_log("info", f"Task received from {payload.senderId}", taskId=payload.taskId, sender=payload.senderId)
     task_id = await s.task_receiver.receive(payload)
     return {"taskId": task_id, "status": "accepted"}
 
 
 @router.get("/tasks")
-async def list_tasks() -> dict[str, Any]:
-    return {"tasks": []}
+async def list_tasks(request: Request, limit: int = 50) -> dict[str, Any]:
+    s = get_state(request)
+    tasks = [t.model_dump() for t in s.task_receiver._tasks[-limit:]]
+    return {"tasks": tasks, "agentId": AGENT_ID}
 
 
 # ─── LLM Callback ─────────────────────────────────────────────────────────────
@@ -95,8 +121,12 @@ async def llm_callback(task_id: str, request: Request) -> dict[str, Any]:
     s = get_state(request)
     body = await request.json()
     if "error" in body:
-        log.error("llm_callback_error", task_id=task_id, error=body["error"])
+        err = body["error"]
+        _capture_log("error", f"LLM job failed for task {task_id}", taskId=task_id, error=err)
+        log.error("llm_callback_error", task_id=task_id, error=err)
+        await s.task_receiver.fail(task_id, err)
         return {"ok": False}
+    _capture_log("info", f"LLM job completed for task {task_id}", taskId=task_id)
     await s.task_receiver.complete(task_id, body.get("output", ""))
     return {"ok": True}
 
@@ -119,14 +149,11 @@ class ChatBody(BaseModel):
 
 @router.post("/chat")
 async def chat(body: ChatBody, request: Request) -> dict[str, Any]:
-    import uuid
+    from ..communication.task_receiver import TaskPayload
     s = get_state(request)
-    task_id = await s.task_receiver.receive(
-        __import__("app.communication.task_receiver", fromlist=["TaskPayload"]).TaskPayload(
-            instruction=body.message,
-            senderId="chat",
-        )
-    )
+    _capture_log("info", f"Chat message received", message=body.message[:100])
+    payload = TaskPayload(instruction=body.message, senderId="chat")
+    task_id = await s.task_receiver.receive(payload)
     return {"taskId": task_id, "status": "processing"}
 
 
@@ -151,5 +178,4 @@ async def run_shell(body: ShellBody, request: Request) -> dict[str, Any]:
 async def get_config(request: Request) -> dict[str, Any]:
     s = get_state(request)
     cfg = s.config.model_dump()
-    # Redact any potential secrets
     return cfg

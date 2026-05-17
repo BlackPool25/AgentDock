@@ -16,6 +16,7 @@ export function generateWorkflow(design: SystemDesign): string {
       const trigger: Record<string, unknown> = { type: conn.trigger.type };
       if (conn.trigger.type === "task_completion") {
         trigger["pass_output"] = conn.trigger.passOutput;
+        if (conn.trigger.actionFilter) trigger["action_filter"] = conn.trigger.actionFilter;
       } else if (conn.trigger.type === "cron") {
         trigger["schedule"] = conn.trigger.cronSchedule;
         trigger["timezone"] = conn.trigger.timezone;

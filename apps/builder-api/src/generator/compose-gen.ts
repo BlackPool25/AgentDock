@@ -43,6 +43,7 @@ export function generateCompose(design: SystemDesign): string {
       "GEMINI_API_KEY=${GEMINI_API_KEY:-}",
       "GROQ_API_KEY=${GROQ_API_KEY:-}",
     ],
+    extra_hosts: ["host.docker.internal:host-gateway"],
     depends_on: { redis: { condition: "service_healthy" } },
     networks: ["agentdock-net"],
     restart: "unless-stopped",

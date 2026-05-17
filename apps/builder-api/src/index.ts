@@ -33,6 +33,8 @@ db.run(sql`
 `);
 
 const app = new Hono();
+const jwtSecret = process.env.JWT_SECRET ?? "dev-secret-min-32-chars-long-here";
+const jwtMiddleware = jwt({ secret: jwtSecret, alg: "HS256" });
 
 app.use("*", cors({
   origin: process.env.CORS_ORIGIN ?? "*",
@@ -41,11 +43,19 @@ app.use("*", cors({
 
 // ── Public routes ─────────────────────────────────────────────────────────────
 app.get("/health", (c) => c.json({ status: "ok", service: "builder-api" }));
-app.route("/api/auth", authRoutes);
+app.post("/api/auth/login", (c) => authRoutes.fetch(new Request(new URL("/login", c.req.url), c.req.raw), c.env));
 
 // ── JWT-protected routes ──────────────────────────────────────────────────────
-const jwtSecret = process.env.JWT_SECRET ?? "dev-secret-min-32-chars-long-here";
-app.use("/api/systems/*", jwt({ secret: jwtSecret, alg: "HS256" }));
+// In Hono, app.use middleware applies to routes registered AFTER it.
+// Register JWT middleware before the protected routes.
+app.use("/api/auth/me", jwtMiddleware);
+app.use("/api/systems/*", jwtMiddleware);
+
+app.get("/api/auth/me", async (c) => {
+  const payload = c.get("jwtPayload") as { sub: string; email: string } | undefined;
+  if (!payload) return c.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, 401);
+  return c.json({ sub: payload.sub, email: payload.email });
+});
 
 app.route("/api/systems", systemRoutes);
 app.route("/api/systems", generateRoutes);

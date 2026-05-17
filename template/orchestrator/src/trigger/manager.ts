@@ -84,7 +84,8 @@ export async function handleTaskCompletion(
   fromAgentId: string,
   taskId: string,
   output: string,
-  workflow: WorkflowConfig
+  workflow: WorkflowConfig,
+  actionName?: string,
 ) {
   wsHub.broadcast({
     type: "agent:task:completed",
@@ -97,6 +98,10 @@ export async function handleTaskCompletion(
 
   for (const conn of workflow.connections) {
     if (conn.from === fromAgentId && conn.trigger.type === "task_completion") {
+      // If action_filter is set, only fire when the completed action matches
+      if (conn.trigger.action_filter && conn.trigger.action_filter !== actionName) {
+        continue;
+      }
       const instruction = conn.trigger.pass_output
         ? `Process this output from ${fromAgentId}:\n\n${output}`
         : `${fromAgentId} completed a task. Begin your work.`;

@@ -9,7 +9,7 @@ from .config.loader import load_config
 from .memory.manager import MemoryManager
 from .shell.executor import ShellExecutor
 from .llm.client import LLMClient
-from .communication.task_receiver import TaskReceiver
+from .communication.task_receiver import TaskReceiver, TaskPayload
 from .communication.file_receiver import FileReceiver
 from .mcp.client import MCPClientManager
 from .triggers.scheduler import AgentScheduler
@@ -49,8 +49,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         max_tokens=config.llm.max_tokens,
     )
 
-    # 5. Task + file receivers
-    task_receiver = TaskReceiver(memory, llm)
+    # 5. Task + file receivers — pass config so task_receiver can dispatch actions
+    task_receiver = TaskReceiver(memory, llm, config)
     file_receiver = FileReceiver(memory)
 
     # 6. MCP
@@ -60,9 +60,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 7. Scheduler
     scheduler = AgentScheduler()
     await scheduler.start(config.triggers, lambda msg: task_receiver.receive(
-        __import__("app.communication.task_receiver", fromlist=["TaskPayload"]).TaskPayload(
-            instruction=msg, senderId="scheduler"
-        )
+        TaskPayload(instruction=msg, senderId="scheduler")
     ))
 
     # Attach to app state

@@ -33,9 +33,12 @@ export async function proxyToAgent(
 
   try {
     const req = c.req.raw;
+    // Strip Authorization header — agents don't use JWT auth, forwarding it causes rejections
+    const headers = new Headers(req.headers);
+    headers.delete("authorization");
     const proxyReq = new Request(targetUrl, {
       method: req.method,
-      headers: req.headers,
+      headers,
       body: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
     });
 
