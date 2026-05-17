@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Bot, Cpu, Zap } from "lucide-react";
+import { Bot, Zap } from "lucide-react";
 import { cn } from "@/lib/utils.js";
 import type { AgentNodeData } from "@/stores/canvas.store.js";
 
@@ -12,8 +12,18 @@ const PROVIDER_COLORS: Record<string, string> = {
   groq: "bg-purple-500/20 text-purple-400",
 };
 
-export const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
-  const providerColor = PROVIDER_COLORS[data.llm?.provider ?? "ollama"] ?? PROVIDER_COLORS["ollama"];
+// Each side has both a source and target handle with unique IDs.
+// React Flow picks the shortest path automatically.
+const SIDES = [
+  { position: Position.Top,    sourceId: "src-top",    targetId: "tgt-top"    },
+  { position: Position.Bottom, sourceId: "src-bottom", targetId: "tgt-bottom" },
+  { position: Position.Left,   sourceId: "src-left",   targetId: "tgt-left"   },
+  { position: Position.Right,  sourceId: "src-right",  targetId: "tgt-right"  },
+];
+
+export const AgentNode = memo(({ data, selected }: NodeProps) => {
+  const nodeData = data as AgentNodeData;
+  const providerColor = PROVIDER_COLORS[nodeData.llm?.provider ?? "ollama"] ?? PROVIDER_COLORS["ollama"];
 
   return (
     <div
@@ -22,7 +32,22 @@ export const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => 
         selected ? "border-primary shadow-primary/20" : "border-border"
       )}
     >
-      <Handle type="target" position={Position.Left} className="!w-3 !h-3" />
+      {SIDES.map(({ position, sourceId, targetId }) => (
+        <span key={sourceId}>
+          <Handle
+            type="source"
+            position={position}
+            id={sourceId}
+            className="!w-2.5 !h-2.5 !bg-primary !border-primary/50"
+          />
+          <Handle
+            type="target"
+            position={position}
+            id={targetId}
+            className="!w-2.5 !h-2.5 !bg-muted !border-border"
+          />
+        </span>
+      ))}
 
       <div className="p-3">
         <div className="flex items-center gap-2 mb-2">
@@ -30,27 +55,28 @@ export const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => 
             <Bot className="w-4 h-4 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{data.name || "Unnamed Agent"}</p>
-            <p className="text-xs text-muted-foreground font-mono truncate">{data.id}</p>
+            <p className="text-sm font-medium truncate">{nodeData.name || "Unnamed Agent"}</p>
+            <p className="text-xs text-muted-foreground font-mono truncate">{nodeData.id}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className={cn("text-xs px-1.5 py-0.5 rounded font-mono", providerColor)}>
-            {data.llm?.provider ?? "ollama"}
+            {nodeData.llm?.provider ?? "ollama"}
           </span>
-          {data.triggers?.some((t) => t.type === "cron") && (
+          {nodeData.triggers?.some((t) => t.type === "cron") && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 flex items-center gap-1">
               <Zap className="w-3 h-3" /> cron
             </span>
           )}
-          {data.expose?.includes("chat") && (
+          {nodeData.expose?.includes("chat") && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400">chat</span>
+          )}
+          {nodeData.expose?.includes("tasks") && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400">tasks</span>
           )}
         </div>
       </div>
-
-      <Handle type="source" position={Position.Right} className="!w-3 !h-3" />
     </div>
   );
 });

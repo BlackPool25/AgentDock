@@ -8,14 +8,24 @@ const TRIGGER_TYPES: { value: TriggerType; label: string }[] = [
   { value: "cron", label: "Cron Schedule" },
   { value: "webhook", label: "Webhook" },
   { value: "memory_condition", label: "Memory Condition" },
+  { value: "file_received", label: "File Received" },
 ];
 
 export function TriggerPanel({ edgeId }: { edgeId: string }) {
   const edge = useCanvasStore((s) => s.edges.find((e) => e.id === edgeId));
+  const nodes = useCanvasStore((s) => s.nodes);
   const updateEdgeData = useCanvasStore((s) => s.updateEdgeData);
 
   if (!edge) return null;
-  const trigger = edge.data?.trigger ?? { type: "task_completion" as TriggerType, passOutput: true };
+
+  const sourceName = (nodes.find((n) => n.id === edge.source)?.data as { name?: string })?.name ?? edge.source;
+  const targetName = (nodes.find((n) => n.id === edge.target)?.data as { name?: string })?.name ?? edge.target;
+  const defaultTrigger: ConnectionDesign["trigger"] = { type: "task_completion", passOutput: true };
+  const edgeData = edge.data as { trigger?: ConnectionDesign["trigger"] } | undefined;
+  const trigger: ConnectionDesign["trigger"] = edgeData?.trigger ?? defaultTrigger;
+
+  const updateTrigger = (next: ConnectionDesign["trigger"]) =>
+    updateEdgeData(edgeId, { trigger: next });
 
   const setTriggerType = (type: TriggerType) => {
     const defaults: Record<TriggerType, ConnectionDesign["trigger"]> = {
@@ -23,15 +33,16 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
       cron: { type: "cron", cronSchedule: "0 9 * * 1-5", timezone: "UTC" },
       webhook: { type: "webhook" },
       memory_condition: { type: "memory_condition", file: "status.md", contains: "done", checkIntervalSeconds: 30 },
+      file_received: { type: "file_received", filePattern: "*" },
     };
-    updateEdgeData(edgeId, { trigger: defaults[type] });
+    updateTrigger(defaults[type]);
   };
 
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 border-b border-border">
         <p className="text-sm font-semibold">Connection Trigger</p>
-        <p className="text-xs text-muted-foreground font-mono">{edgeId}</p>
+        <p className="text-xs text-muted-foreground font-mono truncate">{sourceName} → {targetName}</p>
       </div>
 
       <div className="p-4 space-y-4">
@@ -53,7 +64,7 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
             <input
               type="checkbox"
               checked={trigger.passOutput}
-              onChange={(e) => updateEdgeData(edgeId, { trigger: { ...trigger, passOutput: e.target.checked } })}
+              onChange={(e) => updateTrigger({ ...trigger, passOutput: e.target.checked })}
               className="accent-primary"
             />
             <span className="text-sm">Pass output to next agent</span>
@@ -67,7 +78,7 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
               <input
                 className="input font-mono"
                 value={trigger.cronSchedule}
-                onChange={(e) => updateEdgeData(edgeId, { trigger: { ...trigger, cronSchedule: e.target.value } })}
+                onChange={(e) => updateTrigger({ ...trigger, cronSchedule: e.target.value })}
                 placeholder="0 9 * * 1-5"
               />
             </div>
@@ -76,7 +87,7 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
               <input
                 className="input"
                 value={trigger.timezone}
-                onChange={(e) => updateEdgeData(edgeId, { trigger: { ...trigger, timezone: e.target.value } })}
+                onChange={(e) => updateTrigger({ ...trigger, timezone: e.target.value })}
                 placeholder="UTC"
               />
             </div>
@@ -90,6 +101,21 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
           </p>
         )}
 
+        {trigger.type === "file_received" && (
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">File Pattern</label>
+            <input
+              className="input font-mono"
+              value={trigger.filePattern}
+              onChange={(e) => updateTrigger({ ...trigger, filePattern: e.target.value })}
+              placeholder="* or report-*.md"
+            />
+            <p className="text-xs text-muted-foreground">
+              Triggers when the source agent writes a file matching this pattern to its memory.
+            </p>
+          </div>
+        )}
+
         {trigger.type === "memory_condition" && (
           <>
             <div className="space-y-1">
@@ -97,7 +123,7 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
               <input
                 className="input font-mono"
                 value={trigger.file}
-                onChange={(e) => updateEdgeData(edgeId, { trigger: { ...trigger, file: e.target.value } })}
+                onChange={(e) => updateTrigger({ ...trigger, file: e.target.value })}
                 placeholder="status.md"
               />
             </div>
@@ -106,7 +132,7 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
               <input
                 className="input"
                 value={trigger.contains}
-                onChange={(e) => updateEdgeData(edgeId, { trigger: { ...trigger, contains: e.target.value } })}
+                onChange={(e) => updateTrigger({ ...trigger, contains: e.target.value })}
                 placeholder="done"
               />
             </div>
@@ -116,7 +142,7 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
                 type="number"
                 className="input"
                 value={trigger.checkIntervalSeconds}
-                onChange={(e) => updateEdgeData(edgeId, { trigger: { ...trigger, checkIntervalSeconds: parseInt(e.target.value) || 30 } })}
+                onChange={(e) => updateTrigger({ ...trigger, checkIntervalSeconds: parseInt(e.target.value) || 30 })}
               />
             </div>
           </>

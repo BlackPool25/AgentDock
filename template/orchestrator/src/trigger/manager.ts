@@ -1,23 +1,25 @@
 import { Cron } from "croner";
 import { randomUUID } from "crypto";
-import { readFileSync } from "fs";
-import { join } from "path";
 import type { WorkflowConfig } from "../config/loader.js";
 import { wsHub } from "../api/websocket/hub.js";
 import { logger } from "../logger.js";
 
 const AGENT_PORT = 8080;
 const SYSTEM_ID = process.env.SYSTEM_ID ?? "unknown";
-const CONFIGS_DIR = process.env.CONFIGS_DIR ?? "/app/configs";
 
-async function sendTask(toAgentId: string, instruction: string, context: Record<string, unknown> = {}) {
+async function sendTask(
+  toAgentId: string,
+  instruction: string,
+  context: Record<string, unknown> = {},
+  attachedFiles: { filename: string; content: string; mimeType: string }[] = []
+) {
   const taskId = randomUUID();
   const url = `http://${toAgentId}:${AGENT_PORT}/tasks`;
   try {
     await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId, senderId: "orchestrator", instruction, context }),
+      body: JSON.stringify({ taskId, senderId: "orchestrator", instruction, context, attachedFiles }),
     });
     wsHub.broadcast({ type: "agent:task:started", agentId: toAgentId, systemId: SYSTEM_ID, taskId, timestamp: new Date().toISOString() });
     logger.info({ toAgentId, taskId }, "Task dispatched");
@@ -36,28 +38,39 @@ export function startTriggers(workflow: WorkflowConfig) {
     if (trigger.type === "cron" && trigger.schedule) {
       const job = new Cron(trigger.schedule, { timezone: trigger.timezone ?? "UTC" }, () => {
         logger.info({ to, schedule: trigger.schedule }, "Cron trigger fired");
-        sendTask(to, `Scheduled task from cron: ${trigger.schedule}`);
+        sendTask(to, `Scheduled task: ${trigger.schedule}`);
       });
       cronJobs.push(job);
       logger.info({ to, schedule: trigger.schedule }, "Cron trigger registered");
     }
 
     if (trigger.type === "memory_condition" && trigger.file && trigger.contains) {
+      // Poll the source agent's memory API — avoids needing direct volume access
       const interval = (trigger.check_interval_seconds ?? 30) * 1000;
-      const poller = setInterval(() => {
+      const poller = setInterval(async () => {
         try {
-          const filePath = join(CONFIGS_DIR, "..", "memory", conn.from, trigger.file!);
-          const content = readFileSync(filePath, "utf8");
+          const res = await fetch(
+            `http://${conn.from}:${AGENT_PORT}/memory/${trigger.file}`,
+            { signal: AbortSignal.timeout(5000) }
+          );
+          if (!res.ok) return;
+          const { content } = await res.json() as { content: string };
           if (content.includes(trigger.contains!)) {
             logger.info({ from: conn.from, to, file: trigger.file }, "Memory condition met");
-            sendTask(to, `Memory condition triggered: ${trigger.file} contains '${trigger.contains}'`);
+            sendTask(to, `Memory condition triggered: ${trigger.file} contains '${trigger.contains}'`, {
+              sourceAgentId: conn.from,
+              triggerFile: trigger.file,
+            });
           }
         } catch {
-          // File doesn't exist yet — normal
+          // Agent not ready yet — normal during startup
         }
       }, interval);
       memoryPollers.push(poller);
+      logger.info({ from: conn.from, to, file: trigger.file }, "Memory condition poller registered");
     }
+
+    // file_received: handled via internal events from agents (see handleFileWritten below)
   }
 }
 
@@ -66,7 +79,7 @@ export function stopTriggers() {
   for (const poller of memoryPollers) clearInterval(poller);
 }
 
-// Called by agents via POST /internal/events when they complete a task
+// Called when an agent completes a task
 export async function handleTaskCompletion(
   fromAgentId: string,
   taskId: string,
@@ -82,13 +95,49 @@ export async function handleTaskCompletion(
     timestamp: new Date().toISOString(),
   });
 
-  // Find connections triggered by this agent's task completion
   for (const conn of workflow.connections) {
     if (conn.from === fromAgentId && conn.trigger.type === "task_completion") {
       const instruction = conn.trigger.pass_output
-        ? `Process this output from ${fromAgentId}: ${output}`
+        ? `Process this output from ${fromAgentId}:\n\n${output}`
         : `${fromAgentId} completed a task. Begin your work.`;
       await sendTask(conn.to, instruction, { sourceTaskId: taskId, sourceAgentId: fromAgentId });
     }
   }
+}
+
+// Called when an agent writes a file to its memory (agent posts agent:memory:written event)
+export async function handleFileWritten(
+  fromAgentId: string,
+  filename: string,
+  content: string,
+  workflow: WorkflowConfig
+) {
+  wsHub.broadcast({
+    type: "agent:memory:updated",
+    agentId: fromAgentId,
+    systemId: SYSTEM_ID,
+    file: filename,
+    timestamp: new Date().toISOString(),
+  });
+
+  for (const conn of workflow.connections) {
+    if (conn.from !== fromAgentId || conn.trigger.type !== "file_received") continue;
+    const pattern = conn.trigger.file_pattern ?? "*";
+    if (!matchesPattern(filename, pattern)) continue;
+
+    logger.info({ from: fromAgentId, to: conn.to, filename }, "file_received trigger fired");
+    await sendTask(
+      conn.to,
+      `File received from ${fromAgentId}: ${filename}`,
+      { sourceAgentId: fromAgentId, filename },
+      [{ filename, content: Buffer.from(content).toString("base64"), mimeType: "text/plain" }]
+    );
+  }
+}
+
+function matchesPattern(filename: string, pattern: string): boolean {
+  if (pattern === "*") return true;
+  // Simple glob: only supports * wildcard
+  const regex = new RegExp("^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
+  return regex.test(filename);
 }

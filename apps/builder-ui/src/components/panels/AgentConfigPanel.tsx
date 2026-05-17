@@ -107,17 +107,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
         )}
 
         {tab === "Memory" && (
-          <>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={data.memory.gitAutoCommit}
-                onChange={(e) => update({ memory: { ...data.memory, gitAutoCommit: e.target.checked } })}
-                className="accent-primary"
-              />
-              <span className="text-sm">Git auto-commit memory changes</span>
-            </label>
-          </>
+          <MemoryTab nodeId={nodeId} data={data} update={update} />
         )}
 
         {tab === "Shell" && (
@@ -133,12 +123,21 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
         )}
 
         {tab === "MCPs" && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {data.mcps.map((mcp, i) => (
-              <div key={i} className="p-2 rounded border border-border space-y-1">
+              <div key={i} className="p-3 rounded border border-border space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">MCP {i + 1}</span>
+                  <button
+                    className="text-xs text-destructive hover:underline"
+                    onClick={() => update({ mcps: data.mcps.filter((_, j) => j !== i) })}
+                  >
+                    Remove
+                  </button>
+                </div>
                 <input
                   className="input text-xs"
-                  placeholder="MCP name"
+                  placeholder="Name (e.g. youtube-mcp)"
                   value={mcp.name}
                   onChange={(e) => {
                     const mcps = [...data.mcps];
@@ -146,22 +145,93 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                     update({ mcps });
                   }}
                 />
-                <input
+                <select
                   className="input text-xs"
-                  placeholder="URL (for SSE transport)"
-                  value={mcp.url ?? ""}
+                  value={mcp.transport}
                   onChange={(e) => {
                     const mcps = [...data.mcps];
-                    mcps[i] = { ...mcps[i], url: e.target.value };
+                    mcps[i] = { ...mcps[i], transport: e.target.value as "sse" | "stdio", url: "", command: "" };
                     update({ mcps });
                   }}
-                />
-                <button
-                  className="text-xs text-destructive hover:underline"
-                  onClick={() => update({ mcps: data.mcps.filter((_, j) => j !== i) })}
                 >
-                  Remove
-                </button>
+                  <option value="sse">SSE (HTTP)</option>
+                  <option value="stdio">stdio (local process)</option>
+                </select>
+                {mcp.transport === "sse" ? (
+                  <input
+                    className="input text-xs font-mono"
+                    placeholder="http://mcp-server:3000/sse"
+                    value={mcp.url ?? ""}
+                    onChange={(e) => {
+                      const mcps = [...data.mcps];
+                      mcps[i] = { ...mcps[i], url: e.target.value };
+                      update({ mcps });
+                    }}
+                  />
+                ) : (
+                  <input
+                    className="input text-xs font-mono"
+                    placeholder="command (e.g. npx @modelcontextprotocol/server-filesystem)"
+                    value={mcp.command ?? ""}
+                    onChange={(e) => {
+                      const mcps = [...data.mcps];
+                      mcps[i] = { ...mcps[i], command: e.target.value };
+                      update({ mcps });
+                    }}
+                  />
+                )}
+                {/* Env vars */}
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Env vars</p>
+                  {Object.entries(mcp.env).map(([k, v], ei) => (
+                    <div key={ei} className="flex gap-1">
+                      <input
+                        className="input text-xs font-mono flex-1"
+                        placeholder="KEY"
+                        value={k}
+                        onChange={(e) => {
+                          const mcps = [...data.mcps];
+                          const env = Object.fromEntries(
+                            Object.entries(mcps[i].env).map(([ek, ev], idx) =>
+                              idx === ei ? [e.target.value, ev] : [ek, ev]
+                            )
+                          );
+                          mcps[i] = { ...mcps[i], env };
+                          update({ mcps });
+                        }}
+                      />
+                      <input
+                        className="input text-xs font-mono flex-1"
+                        placeholder="${ENV_VAR}"
+                        value={v}
+                        onChange={(e) => {
+                          const mcps = [...data.mcps];
+                          mcps[i] = { ...mcps[i], env: { ...mcps[i].env, [k]: e.target.value } };
+                          update({ mcps });
+                        }}
+                      />
+                      <button
+                        className="text-xs text-destructive px-1"
+                        onClick={() => {
+                          const mcps = [...data.mcps];
+                          const env = Object.fromEntries(
+                            Object.entries(mcps[i].env).filter((_, idx) => idx !== ei)
+                          );
+                          mcps[i] = { ...mcps[i], env };
+                          update({ mcps });
+                        }}
+                      >×</button>
+                    </div>
+                  ))}
+                  <button
+                    className="text-xs text-primary hover:underline"
+                    onClick={() => {
+                      const mcps = [...data.mcps];
+                      mcps[i] = { ...mcps[i], env: { ...mcps[i].env, "": "" } };
+                      update({ mcps });
+                    }}
+                  >+ Add env var</button>
+                </div>
               </div>
             ))}
             <button
@@ -225,6 +295,63 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="space-y-1">
       <label className="text-xs text-muted-foreground">{label}</label>
       {children}
+    </div>
+  );
+}
+
+function MemoryTab({
+  nodeId,
+  data,
+  update,
+}: {
+  nodeId: string;
+  data: AgentDesign;
+  update: (patch: Partial<AgentDesign>) => void;
+}) {
+  const otherAgents = useCanvasStore((s) =>
+    s.nodes.filter((n) => n.id !== nodeId).map((n) => ({ id: (n.data as AgentDesign).id, name: (n.data as AgentDesign).name }))
+  );
+
+  const toggleReadableBy = (agentId: string, checked: boolean) => {
+    const readableBy = checked
+      ? [...data.memory.readableBy, agentId]
+      : data.memory.readableBy.filter((id) => id !== agentId);
+    update({ memory: { ...data.memory, readableBy } });
+  };
+
+  return (
+    <div className="space-y-3">
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={data.memory.gitAutoCommit}
+          onChange={(e) => update({ memory: { ...data.memory, gitAutoCommit: e.target.checked } })}
+          className="accent-primary"
+        />
+        <span className="text-sm">Git auto-commit memory changes</span>
+      </label>
+
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">Readable by other agents</p>
+        {otherAgents.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">No other agents in canvas</p>
+        ) : (
+          <div className="space-y-1">
+            {otherAgents.map((a) => (
+              <label key={a.id} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={data.memory.readableBy.includes(a.id)}
+                  onChange={(e) => toggleReadableBy(a.id, e.target.checked)}
+                  className="accent-primary"
+                />
+                <span className="text-sm">{a.name}</span>
+                <span className="text-xs text-muted-foreground font-mono">{a.id}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

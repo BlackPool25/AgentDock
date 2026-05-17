@@ -14,13 +14,14 @@ const WorkflowSchema = z.object({
     from: z.string(),
     to: z.string(),
     trigger: z.object({
-      type: z.enum(["task_completion", "cron", "webhook", "memory_condition"]),
+      type: z.enum(["task_completion", "cron", "webhook", "memory_condition", "file_received"]),
       pass_output: z.boolean().optional(),
       schedule: z.string().optional(),
       timezone: z.string().optional(),
       file: z.string().optional(),
       contains: z.string().optional(),
       check_interval_seconds: z.number().optional(),
+      file_pattern: z.string().optional(),
     }),
   })).default([]),
 });

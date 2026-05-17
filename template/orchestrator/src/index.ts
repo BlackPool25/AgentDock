@@ -9,7 +9,7 @@ import { wsHub } from "./api/websocket/hub.js";
 import { createAgentRoutes } from "./api/routes/agents.js";
 import { createSystemRoutes } from "./api/routes/system.js";
 import { createWebhookRoutes } from "./api/routes/webhooks.js";
-import { startTriggers, handleTaskCompletion } from "./trigger/manager.js";
+import { startTriggers, handleTaskCompletion, handleFileWritten } from "./trigger/manager.js";
 import { getAgentStatus } from "./docker/agent-manager.js";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "change-me";
@@ -48,7 +48,11 @@ app.post("/internal/events", async (c) => {
   wsHub.broadcast({ ...event, systemId: SYSTEM_ID, timestamp: new Date().toISOString() });
 
   if (event.type === "agent:task:completed" && event.taskId && event.output) {
-    await handleTaskCompletion(event.agentId, event.taskId, event.output, config.workflow);
+    await handleTaskCompletion(event.agentId, event.taskId, event.output as string, config.workflow);
+  }
+
+  if (event.type === "agent:memory:written" && event.filename && event.content !== undefined) {
+    await handleFileWritten(event.agentId, event.filename as string, event.content as string, config.workflow);
   }
 
   return c.json({ ok: true });

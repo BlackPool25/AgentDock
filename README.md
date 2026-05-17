@@ -90,6 +90,8 @@ cp .env.example .env
 docker compose -f docker/builder.docker-compose.yml up -d
 ```
 
+Note: the builder Docker images install dependencies from the workspace root `bun.lockb`. If you change any package versions locally, run `bun install` to update the lockfile before rebuilding the images.
+
 Open `http://localhost:3000` → sign in with `admin@agentdock.local` / your password.
 
 ### Development (hot reload)
@@ -101,42 +103,59 @@ docker compose -f docker/builder.dev.docker-compose.yml up
 
 ---
 
-## Using the Builder
+## How to Use the Builder UI
 
-### 1. Create a System
-Click **New System** on the System Library page. Give it a name.
+1. **Create a system**: click **New System** in the System Library.
+1. **Add agents**: drag **Agent** from the palette onto the canvas.
+1. **Configure an agent** (right panel): General, LLM, Memory, Tools, MCPs, Expose.
+1. **Connect agents**: draw edges and set trigger type (task completion, cron, webhook, memory condition).
+1. **Generate**: click **Generate** to download a self-contained runtime zip.
 
-### 2. Design on the Canvas
-- Drag **Agent** nodes from the left palette onto the canvas
-- Click an agent node to configure it in the right panel (LLM, memory, tools, expose, MCPs)
-- Draw connections between agents by dragging from one node's handle to another
-- Click a connection to configure its trigger type (task completion, cron, webhook, memory condition)
+The builder stores all designs in SQLite and keeps versioned generations in `apps/builder-api/data/generated`.
 
-### 3. Configure Agents
-Each agent has 7 configuration tabs:
+---
 
-| Tab | What you configure |
-|---|---|
-| General | Agent ID, name, description |
-| LLM | Provider (Ollama/OpenAI/Anthropic/Gemini/Groq), model, temperature, system prompt |
-| Memory | Git auto-commit, which other agents can read this agent's memory |
-| Shell | Enable/disable shell access |
-| MCPs | MCP server connections (SSE or stdio transport) |
-| Tools | Python packages and system packages to install |
-| Expose | Which endpoints are accessible via API key (logs, chat, memory, status, tasks) |
+## Running a Generated System
 
-### 4. Configure Connections
-Each connection between agents has a trigger type:
+1. Unzip the generated project.
+1. Copy env template and fill in required values:
 
-| Trigger | When it fires |
-|---|---|
-| Task Completion | When the source agent finishes a task |
-| Cron | On a schedule (cron expression + timezone) |
-| Webhook | On an inbound HTTP POST to `/webhooks/{agent-id}` |
-| Memory Condition | When a memory file contains a specific string |
+```bash
+cp .env.example .env
+# Edit .env to add JWT_SECRET and any LLM provider keys
+```
 
-### 5. Generate
-Click **Generate** → the builder validates your design, generates the project, and downloads a zip file.
+1. Start the runtime:
+
+```bash
+docker compose up --build
+```
+
+The runtime is API-only (no UI). It exposes a single public surface: the orchestrator on port 4000.
+
+---
+
+## Endpoint Exposure Model
+
+- **Only the orchestrator is public**. Agent containers never expose host ports.
+- Every agent endpoint is proxied through `http://localhost:4000/api/agents/{id}/...`.
+- The `expose` list in each agent config controls what is accessible (status, logs, memory, chat, tasks).
+- Update `expose` in the builder UI, regenerate, or hot-edit the YAML and reload the agent.
+
+---
+
+## .env and Configuration
+
+The generated `.env.example` includes:
+- Required system keys (`SYSTEM_ID`, `JWT_SECRET`, `ORCHESTRATOR_PORT`)
+- LLM provider keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.)
+- MCP env var stubs inferred from MCP configs
+
+If you need additional env vars:
+- Add `${VAR_NAME}` references inside the generated agent YAML (or MCP `env` entries in the builder UI), then
+- Put the actual values in `.env` before running.
+
+The builder intentionally does **not** store secrets. All secret values live in the generated runtime `.env`.
 
 ---
 

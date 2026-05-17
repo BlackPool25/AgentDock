@@ -9,22 +9,24 @@ import {
   type Connection,
   addEdge,
 } from "@xyflow/react";
+import { nanoid } from "nanoid";
 import type { AgentDesign, ConnectionDesign } from "@agentdock/config-schema";
 
-export type AgentNodeData = AgentDesign;
+export type AgentNodeData = AgentDesign & Record<string, unknown>;
 
 export interface TriggerEdgeData {
   trigger: ConnectionDesign["trigger"];
 }
+export type TriggerEdgeDataRecord = TriggerEdgeData & Record<string, unknown>;
 
 interface CanvasStore {
-  nodes: Node<AgentNodeData>[];
-  edges: Edge<TriggerEdgeData>[];
+  nodes: Node[];
+  edges: Edge[];
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
 
-  setNodes: (nodes: Node<AgentNodeData>[]) => void;
-  setEdges: (edges: Edge<TriggerEdgeData>[]) => void;
+  setNodes: (nodes: Node[]) => void;
+  setEdges: (edges: Edge[]) => void;
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
@@ -66,18 +68,26 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   setEdges: (edges) => set({ edges }),
 
   onNodesChange: (changes) =>
-    set({ nodes: applyNodeChanges(changes, get().nodes) as Node<AgentNodeData>[] }),
+    set({ nodes: applyNodeChanges(changes, get().nodes) }),
 
   onEdgesChange: (changes) =>
-    set({ edges: applyEdgeChanges(changes, get().edges) as Edge<TriggerEdgeData>[] }),
+    set({ edges: applyEdgeChanges(changes, get().edges) }),
 
-  onConnect: (connection) =>
+  onConnect: (connection) => {
+    const id = `edge-${nanoid(6)}`;
+    const newEdge: Edge = {
+      ...connection,
+      id,
+      type: "trigger",
+      data: { trigger: { type: "task_completion", passOutput: true } } as TriggerEdgeDataRecord,
+    };
     set({
-      edges: addEdge(
-        { ...connection, type: "trigger", data: { trigger: { type: "task_completion", passOutput: true } } },
-        get().edges
-      ) as Edge<TriggerEdgeData>[],
-    }),
+      edges: addEdge(newEdge, get().edges),
+      // Auto-select the new edge so TriggerPanel opens immediately
+      selectedEdgeId: id,
+      selectedNodeId: null,
+    });
+  },
 
   selectNode: (id) => set({ selectedNodeId: id, selectedEdgeId: null }),
   selectEdge: (id) => set({ selectedEdgeId: id, selectedNodeId: null }),
@@ -92,14 +102,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   updateEdgeData: (id, data) =>
     set({
       edges: get().edges.map((e) =>
-        e.id === id ? { ...e, data: { ...e.data, ...data } as TriggerEdgeData } : e
+        e.id === id ? { ...e, data: { ...e.data, ...data } as TriggerEdgeDataRecord } : e
       ),
     }),
 
   addAgentNode: (position) => {
     nodeCounter++;
     const id = `agent-${nodeCounter}`;
-    const node: Node<AgentNodeData> = {
+    const node: Node = {
       id,
       type: "agent",
       position,

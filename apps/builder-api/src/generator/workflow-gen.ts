@@ -23,6 +23,8 @@ export function generateWorkflow(design: SystemDesign): string {
         trigger["file"] = conn.trigger.file;
         trigger["contains"] = conn.trigger.contains;
         trigger["check_interval_seconds"] = conn.trigger.checkIntervalSeconds;
+      } else if (conn.trigger.type === "file_received") {
+        trigger["file_pattern"] = conn.trigger.filePattern;
       }
       return { id: conn.id, from: conn.from, to: conn.to, trigger };
     }),

@@ -7,14 +7,16 @@ import {
   BackgroundVariant,
   type NodeMouseHandler,
   type EdgeMouseHandler,
+  type NodeTypes,
+  type EdgeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCanvasStore } from "@/stores/canvas.store.js";
 import { AgentNode } from "./AgentNode.js";
 import { TriggerEdge } from "./TriggerEdge.js";
 
-const nodeTypes = { agent: AgentNode };
-const edgeTypes = { trigger: TriggerEdge };
+const nodeTypes: NodeTypes = { agent: AgentNode };
+const edgeTypes: EdgeTypes = { trigger: TriggerEdge };
 
 export function Canvas() {
   const {

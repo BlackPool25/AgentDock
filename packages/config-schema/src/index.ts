@@ -66,6 +66,11 @@ export const ConnectionDesignSchema = z.object({
       contains: z.string(),
       checkIntervalSeconds: z.number().int().positive().default(30),
     }),
+    z.object({
+      type: z.literal("file_received"),
+      // Trigger fires when the `from` agent writes a file matching this pattern
+      filePattern: z.string().default("*"),
+    }),
   ]),
 });
 
@@ -146,6 +151,10 @@ export const WorkflowConfigSchema = z.object({
         file: z.string(),
         contains: z.string(),
         check_interval_seconds: z.number().int().default(30),
+      }),
+      z.object({
+        type: z.literal("file_received"),
+        file_pattern: z.string().default("*"),
       }),
     ]),
   })).default([]),
