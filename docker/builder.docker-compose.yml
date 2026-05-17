@@ -1,0 +1,38 @@
+services:
+  builder-api:
+    build:
+      context: ..
+      dockerfile: apps/builder-api/Dockerfile
+    ports:
+      - "${BUILDER_API_PORT:-3001}:3001"
+    volumes:
+      - builder-data:/app/apps/builder-api/data
+      - ../template:/app/template:ro
+    environment:
+      - PORT=3001
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-min-32-chars-long-here}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@agentdock.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+      - DATABASE_PATH=/app/apps/builder-api/data/builder.db
+      - TEMPLATE_DIR=/app/template
+      - OUTPUT_DIR=/app/apps/builder-api/data/generated
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  builder-ui:
+    build:
+      context: ..
+      dockerfile: apps/builder-ui/Dockerfile
+    ports:
+      - "${BUILDER_UI_PORT:-3000}:3000"
+    depends_on:
+      builder-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  builder-data:

@@ -1,0 +1,18 @@
+node_modules/
+.env
+dist/
+*.js.map
+*.d.ts.map
+.DS_Store
+*.log
+data/
+# Keep example configs, ignore user-created ones
+configs/agents/*.yaml
+configs/workflows/*.yaml
+!configs/agents/example-agent.yaml
+!configs/workflows/example-workflow.yaml
+__pycache__/
+.venv/
+*.pyc
+.mypy_cache/
+.ruff_cache/

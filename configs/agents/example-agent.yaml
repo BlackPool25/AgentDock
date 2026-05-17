@@ -1,0 +1,40 @@
+agent:
+  id: "example-agent"
+  name: "Example Agent"
+  description: "A simple example agent to get started"
+  version: "1.0.0"
+
+runtime:
+  base_image: "agentdock/agent-base:latest"
+
+llm:
+  provider: "ollama"
+  model: "llama3.1:8b"
+  temperature: 0.7
+  max_tokens: 4096
+  system_prompt: |
+    You are a helpful assistant. Respond clearly and concisely.
+
+memory:
+  git_auto_commit: true
+  readable_by: []
+  writable_by: []
+
+shell:
+  enabled: false
+
+mcps: []
+
+tools:
+  python_packages: []
+  system_packages: []
+
+triggers:
+  - type: "task"
+  - type: "webhook"
+
+expose:
+  - status
+  - logs
+  - chat
+  - memory

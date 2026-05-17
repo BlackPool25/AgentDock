@@ -1,0 +1,93 @@
+name: agentdock-dev
+
+services:
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: docker/orchestrator.Dockerfile
+      target: dev
+    ports:
+      - "4000:4000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../apps/orchestrator/src:/app/src
+      - ../configs:/app/configs
+      - orchestrator-data:/app/data
+    environment:
+      - SYSTEM_ID=dev
+      - JWT_SECRET=dev-secret-min-32-chars-for-testing
+      - REDIS_URL=redis://redis:6379
+      - LLM_GATEWAY_URL=http://llm-gateway:5000
+      - ADMIN_EMAIL=admin@agentdock.local
+      - ADMIN_PASSWORD=changeme
+      - LOG_LEVEL=debug
+    networks:
+      - agentdock-dev
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: bun run --hot src/index.ts
+
+  llm-gateway:
+    build:
+      context: ..
+      dockerfile: docker/llm-gateway.Dockerfile
+      target: dev
+    volumes:
+      - ../apps/llm-gateway/src:/app/src
+      - gateway-data:/app/data
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - WORKER_CONCURRENCY=3
+      - OLLAMA_SERVERS=${OLLAMA_SERVERS:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - LOG_LEVEL=debug
+    networks:
+      - agentdock-dev
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: bun run --hot src/index.ts
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend.Dockerfile
+      target: dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../apps/frontend/src:/app/src
+    environment:
+      - VITE_ORCHESTRATOR_URL=http://localhost:4000
+      - VITE_WS_URL=ws://localhost:4000/ws
+    networks:
+      - agentdock-dev
+    command: bun run dev --host
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - agentdock-dev
+
+networks:
+  agentdock-dev:
+    driver: bridge
+
+volumes:
+  redis-data:
+  orchestrator-data:
+  gateway-data:

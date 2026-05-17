@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 11%;
+    --foreground: 213 31% 91%;
+    --card: 222 47% 14%;
+    --card-foreground: 213 31% 91%;
+    --border: 216 34% 17%;
+    --primary: 210 100% 56%;
+    --primary-foreground: 222 47% 11%;
+    --muted: 223 47% 20%;
+    --muted-foreground: 215 20% 65%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+}
+
+/* React Flow overrides */
+.react-flow__background {
+  background-color: hsl(222 47% 9%);
+}

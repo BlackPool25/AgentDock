@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 11%;
+    --foreground: 213 31% 91%;
+    --card: 222 47% 14%;
+    --card-foreground: 213 31% 91%;
+    --primary: 210 100% 56%;
+    --primary-foreground: 222 47% 11%;
+    --muted: 223 47% 20%;
+    --muted-foreground: 215 20% 65%;
+    --border: 216 34% 22%;
+    --destructive: 0 63% 55%;
+    --destructive-foreground: 210 40% 98%;
+    --radius: 0.5rem;
+  }
+
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; font-family: system-ui, sans-serif; }
+}
+
+/* Input utility */
+.input {
+  @apply w-full px-3 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground
+    focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors;
+}
+
+/* React Flow overrides */
+.react-flow__background { background-color: hsl(222 47% 9%); }
+.react-flow__edge-path { stroke: hsl(210 100% 56%); }
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: hsl(210 100% 56%);
+  border: 2px solid hsl(222 47% 11%);
+}

@@ -1,0 +1,34 @@
+services:
+  builder-api:
+    image: oven/bun:1.1-alpine
+    working_dir: /app/apps/builder-api
+    command: bun run --hot src/index.ts
+    ports:
+      - "${BUILDER_API_PORT:-3001}:3001"
+    volumes:
+      - ..:/app
+      - /app/node_modules
+    environment:
+      - PORT=3001
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-min-32-chars-long-here}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@agentdock.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+      - DATABASE_PATH=/app/apps/builder-api/data/builder.db
+      - TEMPLATE_DIR=/app/template
+      - OUTPUT_DIR=/app/apps/builder-api/data/generated
+    restart: unless-stopped
+
+  builder-ui:
+    image: oven/bun:1.1-alpine
+    working_dir: /app/apps/builder-ui
+    command: bun run dev --host 0.0.0.0
+    ports:
+      - "${BUILDER_UI_PORT:-3000}:3000"
+    volumes:
+      - ..:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:3001
+    depends_on:
+      - builder-api
+    restart: unless-stopped

@@ -1,0 +1,87 @@
+name: agentdock-${SYSTEM_ID:-dev}
+
+services:
+  orchestrator:
+    image: agentdock/orchestrator:latest
+    build:
+      context: ..
+      dockerfile: docker/orchestrator.Dockerfile
+    ports:
+      - "${ORCHESTRATOR_PORT:-4000}:4000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./configs:/app/configs
+      - orchestrator-data:/app/data
+    environment:
+      - SYSTEM_ID=${SYSTEM_ID:-dev}
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_URL=redis://redis:6379
+      - LLM_GATEWAY_URL=http://llm-gateway:5000
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@agentdock.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+    networks:
+      - agentdock-internal
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  llm-gateway:
+    image: agentdock/llm-gateway:latest
+    build:
+      context: ..
+      dockerfile: docker/llm-gateway.Dockerfile
+    volumes:
+      - gateway-data:/app/data
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - WORKER_CONCURRENCY=${LLM_WORKER_CONCURRENCY:-5}
+      - OLLAMA_SERVERS=${OLLAMA_SERVERS:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    networks:
+      - agentdock-internal
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    image: agentdock/frontend:latest
+    build:
+      context: ..
+      dockerfile: docker/frontend.Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    environment:
+      - VITE_ORCHESTRATOR_URL=${VITE_ORCHESTRATOR_URL:-http://localhost:4000}
+      - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:4000/ws}
+    networks:
+      - agentdock-internal
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - agentdock-internal
+    restart: unless-stopped
+
+networks:
+  agentdock-internal:
+    name: agentdock-${SYSTEM_ID:-dev}
+    driver: bridge
+
+volumes:
+  redis-data:
+  orchestrator-data:
+  gateway-data:

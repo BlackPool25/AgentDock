@@ -1,0 +1,15 @@
+workflow:
+  id: "example-workflow"
+  name: "Example Workflow"
+  version: "1.0.0"
+  description: "A simple single-agent workflow to get started"
+
+system:
+  id: "example-system"
+  auto_start: false
+
+agents:
+  - ref: "example-agent"
+    position: { x: 250, y: 200 }
+
+connections: []

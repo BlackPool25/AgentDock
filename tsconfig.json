@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@agentdock/config-schema": ["./packages/config-schema/src/index.ts"],
+      "@agentdock/shared-types": ["./packages/shared-types/src/index.ts"]
+    }
+  }
+}
