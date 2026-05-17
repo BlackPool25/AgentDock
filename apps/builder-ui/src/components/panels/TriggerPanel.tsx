@@ -20,9 +20,18 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
 
   const sourceName = (nodes.find((n) => n.id === edge.source)?.data as { name?: string })?.name ?? edge.source;
   const targetName = (nodes.find((n) => n.id === edge.target)?.data as { name?: string })?.name ?? edge.target;
-  const defaultTrigger: ConnectionDesign["trigger"] = { type: "task_completion", passOutput: true };
-  const edgeData = edge.data as { trigger?: ConnectionDesign["trigger"] } | undefined;
-  const trigger: ConnectionDesign["trigger"] = edgeData?.trigger ?? defaultTrigger;
+
+  const edgeData = edge.data as {
+    trigger?: ConnectionDesign["trigger"];
+    label?: string;
+    description?: string;
+    dataMapping?: Array<{ from: string; to: string }>;
+  } | undefined;
+
+  const trigger: ConnectionDesign["trigger"] = edgeData?.trigger ?? { type: "task_completion", passOutput: true };
+  const label = edgeData?.label ?? "";
+  const description = edgeData?.description ?? "";
+  const dataMapping = edgeData?.dataMapping ?? [];
 
   const updateTrigger = (next: ConnectionDesign["trigger"]) =>
     updateEdgeData(edgeId, { trigger: next });
@@ -38,14 +47,48 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
     updateTrigger(defaults[type]);
   };
 
+  const addMapping = () =>
+    updateEdgeData(edgeId, { dataMapping: [...dataMapping, { from: "", to: "" }] });
+
+  const updateMapping = (i: number, field: "from" | "to", value: string) => {
+    const next = dataMapping.map((m, idx) => idx === i ? { ...m, [field]: value } : m);
+    updateEdgeData(edgeId, { dataMapping: next });
+  };
+
+  const removeMapping = (i: number) =>
+    updateEdgeData(edgeId, { dataMapping: dataMapping.filter((_, idx) => idx !== i) });
+
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 border-b border-border">
-        <p className="text-sm font-semibold">Connection Trigger</p>
+        <p className="text-sm font-semibold">Connection</p>
         <p className="text-xs text-muted-foreground font-mono truncate">{sourceName} → {targetName}</p>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Label & description */}
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground">Label (shown on edge)</label>
+          <input
+            className="input"
+            placeholder="e.g. send report"
+            value={label}
+            onChange={(e) => updateEdgeData(edgeId, { label: e.target.value })}
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground">Description</label>
+          <textarea
+            className="input resize-none text-xs"
+            rows={2}
+            placeholder="What does this connection do?"
+            value={description}
+            onChange={(e) => updateEdgeData(edgeId, { description: e.target.value })}
+          />
+        </div>
+
+        {/* Trigger type */}
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">Trigger Type</label>
           <select
@@ -111,7 +154,7 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
               placeholder="* or report-*.md"
             />
             <p className="text-xs text-muted-foreground">
-              Triggers when the source agent writes a file matching this pattern to its memory.
+              Triggers when the source agent writes a matching file to its memory.
             </p>
           </div>
         )}
@@ -147,6 +190,38 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
             </div>
           </>
         )}
+
+        {/* Data mapping */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-muted-foreground">Data Mapping</label>
+            <button className="text-xs text-primary hover:underline" onClick={addMapping}>+ Add</button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Map output fields from <span className="text-foreground font-mono">{sourceName}</span> to input fields of <span className="text-foreground font-mono">{targetName}</span>.
+          </p>
+          {dataMapping.length === 0 && (
+            <p className="text-xs text-muted-foreground italic">No mappings — full output is passed.</p>
+          )}
+          {dataMapping.map((m, i) => (
+            <div key={i} className="flex gap-1 items-center">
+              <input
+                className="input text-xs font-mono flex-1"
+                placeholder="output.field"
+                value={m.from}
+                onChange={(e) => updateMapping(i, "from", e.target.value)}
+              />
+              <span className="text-muted-foreground text-xs">→</span>
+              <input
+                className="input text-xs font-mono flex-1"
+                placeholder="input.field"
+                value={m.to}
+                onChange={(e) => updateMapping(i, "to", e.target.value)}
+              />
+              <button className="text-xs text-destructive px-1" onClick={() => removeMapping(i)}>×</button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

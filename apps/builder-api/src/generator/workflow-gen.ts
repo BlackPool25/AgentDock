@@ -26,7 +26,16 @@ export function generateWorkflow(design: SystemDesign): string {
       } else if (conn.trigger.type === "file_received") {
         trigger["file_pattern"] = conn.trigger.filePattern;
       }
-      return { id: conn.id, from: conn.from, to: conn.to, trigger };
+
+      return {
+        id: conn.id,
+        from: conn.from,
+        to: conn.to,
+        ...(conn.label ? { label: conn.label } : {}),
+        ...(conn.description ? { description: conn.description } : {}),
+        data_mapping: (conn.dataMapping ?? []).length > 0 ? conn.dataMapping : undefined,
+        trigger,
+      };
     }),
   };
   return yaml.dump(config, { lineWidth: 120 });

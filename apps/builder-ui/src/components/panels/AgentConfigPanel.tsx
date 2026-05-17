@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useCanvasStore } from "@/stores/canvas.store.js";
 import { cn } from "@/lib/utils.js";
-import type { AgentDesign } from "@agentdock/config-schema";
+import type { AgentDesign, AgentAction } from "@agentdock/config-schema";
 
-const TABS = ["General", "LLM", "Memory", "Shell", "MCPs", "Tools", "Expose"] as const;
+const TABS = ["General", "LLM", "Memory", "Shell", "MCPs", "Tools", "Actions", "Expose"] as const;
 type Tab = (typeof TABS)[number];
 
 const PROVIDERS = ["ollama", "openai", "anthropic", "gemini", "groq"] as const;
@@ -180,7 +180,6 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                     }}
                   />
                 )}
-                {/* Env vars */}
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Env vars</p>
                   {Object.entries(mcp.env).map(([k, v], ei) => (
@@ -262,6 +261,10 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
               />
             </Field>
           </>
+        )}
+
+        {tab === "Actions" && (
+          <ActionsTab data={data} update={update} />
         )}
 
         {tab === "Expose" && (
@@ -352,6 +355,101 @@ function MemoryTab({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ActionsTab({
+  data,
+  update,
+}: {
+  data: AgentDesign;
+  update: (patch: Partial<AgentDesign>) => void;
+}) {
+  const actions = data.actions ?? [];
+
+  const addAction = () => {
+    update({
+      actions: [
+        ...actions,
+        {
+          name: `action-${actions.length + 1}`,
+          description: "",
+          inputSchema: {},
+          outputSchema: {},
+          promptTemplate: "",
+          outputFile: undefined,
+        } satisfies AgentAction,
+      ],
+    });
+  };
+
+  const updateAction = (i: number, patch: Partial<AgentAction>) => {
+    const next = actions.map((a, idx) => idx === i ? { ...a, ...patch } : a);
+    update({ actions: next });
+  };
+
+  const removeAction = (i: number) =>
+    update({ actions: actions.filter((_, idx) => idx !== i) });
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Actions are named tasks this agent executes when triggered. Each action has a prompt template and optional output file.
+      </p>
+
+      {actions.map((action, i) => (
+        <div key={i} className="p-3 rounded border border-border space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground font-mono">{action.name || `action-${i + 1}`}</span>
+            <button className="text-xs text-destructive hover:underline" onClick={() => removeAction(i)}>
+              Remove
+            </button>
+          </div>
+
+          <Field label="Action Name (snake_case)">
+            <input
+              className="input text-xs font-mono"
+              placeholder="analyse_request"
+              value={action.name}
+              onChange={(e) => updateAction(i, { name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
+            />
+          </Field>
+
+          <Field label="Description">
+            <input
+              className="input text-xs"
+              placeholder="What this action does"
+              value={action.description}
+              onChange={(e) => updateAction(i, { description: e.target.value })}
+            />
+          </Field>
+
+          <Field label="Prompt Template">
+            <textarea
+              className="input resize-none font-mono text-xs"
+              rows={4}
+              placeholder={"Analyse the following request:\n\n{{input.request}}\n\nWrite your analysis to memory."}
+              value={action.promptTemplate}
+              onChange={(e) => updateAction(i, { promptTemplate: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Use {"{{input.field}}"} for input placeholders.</p>
+          </Field>
+
+          <Field label="Output File (optional, relative to /memory)">
+            <input
+              className="input text-xs font-mono"
+              placeholder="analysis.md"
+              value={action.outputFile ?? ""}
+              onChange={(e) => updateAction(i, { outputFile: e.target.value || undefined })}
+            />
+          </Field>
+        </div>
+      ))}
+
+      <button className="text-xs text-primary hover:underline" onClick={addAction}>
+        + Add Action
+      </button>
     </div>
   );
 }

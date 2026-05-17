@@ -16,6 +16,9 @@ export type AgentNodeData = AgentDesign & Record<string, unknown>;
 
 export interface TriggerEdgeData {
   trigger: ConnectionDesign["trigger"];
+  label?: string;
+  description?: string;
+  dataMapping?: Array<{ from: string; to: string }>;
 }
 export type TriggerEdgeDataRecord = TriggerEdgeData & Record<string, unknown>;
 
@@ -53,6 +56,7 @@ function defaultAgent(id: string): AgentNodeData {
     shell: { enabled: false },
     mcps: [],
     tools: { pythonPackages: [], systemPackages: [] },
+    actions: [],
     triggers: [{ type: "task" }],
     expose: ["status", "logs"],
   };
@@ -79,7 +83,12 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       ...connection,
       id,
       type: "trigger",
-      data: { trigger: { type: "task_completion", passOutput: true } } as TriggerEdgeDataRecord,
+      data: {
+        trigger: { type: "task_completion", passOutput: true },
+        label: "",
+        description: "",
+        dataMapping: [],
+      } as TriggerEdgeDataRecord,
     };
     set({
       edges: addEdge(newEdge, get().edges),

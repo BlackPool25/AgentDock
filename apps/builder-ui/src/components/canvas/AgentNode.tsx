@@ -12,42 +12,95 @@ const PROVIDER_COLORS: Record<string, string> = {
   groq: "bg-purple-500/20 text-purple-400",
 };
 
-// Each side has both a source and target handle with unique IDs.
-// React Flow picks the shortest path automatically.
-const SIDES = [
-  { position: Position.Top,    sourceId: "src-top",    targetId: "tgt-top"    },
-  { position: Position.Bottom, sourceId: "src-bottom", targetId: "tgt-bottom" },
-  { position: Position.Left,   sourceId: "src-left",   targetId: "tgt-left"   },
-  { position: Position.Right,  sourceId: "src-right",  targetId: "tgt-right"  },
-];
+// Each side has a source handle (outgoing) and a target handle (incoming).
+// Source handles are offset slightly outward; target handles slightly inward.
+// This lets React Flow draw A→B and B→A as separate edges without overlap.
+const HANDLE_STYLE_SOURCE = "!w-3 !h-3 !bg-primary !border-2 !border-background";
+const HANDLE_STYLE_TARGET = "!w-3 !h-3 !bg-muted-foreground/60 !border-2 !border-background";
 
 export const AgentNode = memo(({ data, selected }: NodeProps) => {
   const nodeData = data as AgentNodeData;
   const providerColor = PROVIDER_COLORS[nodeData.llm?.provider ?? "ollama"] ?? PROVIDER_COLORS["ollama"];
+  const actionCount = nodeData.actions?.length ?? 0;
 
   return (
     <div
       className={cn(
-        "min-w-[180px] rounded-lg border bg-card shadow-lg transition-all",
-        selected ? "border-primary shadow-primary/20" : "border-border"
+        "min-w-[190px] rounded-lg border bg-card shadow-lg transition-all",
+        selected ? "border-primary shadow-primary/20 shadow-md" : "border-border"
       )}
     >
-      {SIDES.map(({ position, sourceId, targetId }) => (
-        <span key={sourceId}>
-          <Handle
-            type="source"
-            position={position}
-            id={sourceId}
-            className="!w-2.5 !h-2.5 !bg-primary !border-primary/50"
-          />
-          <Handle
-            type="target"
-            position={position}
-            id={targetId}
-            className="!w-2.5 !h-2.5 !bg-muted !border-border"
-          />
-        </span>
-      ))}
+      {/* ── Top handles: source left-of-center, target right-of-center ── */}
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="src-top"
+        style={{ left: "35%" }}
+        className={HANDLE_STYLE_SOURCE}
+        title="Outgoing connection"
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="tgt-top"
+        style={{ left: "65%" }}
+        className={HANDLE_STYLE_TARGET}
+        title="Incoming connection"
+      />
+
+      {/* ── Bottom handles ── */}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="src-bottom"
+        style={{ left: "35%" }}
+        className={HANDLE_STYLE_SOURCE}
+        title="Outgoing connection"
+      />
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id="tgt-bottom"
+        style={{ left: "65%" }}
+        className={HANDLE_STYLE_TARGET}
+        title="Incoming connection"
+      />
+
+      {/* ── Left handles ── */}
+      <Handle
+        type="source"
+        position={Position.Left}
+        id="src-left"
+        style={{ top: "35%" }}
+        className={HANDLE_STYLE_SOURCE}
+        title="Outgoing connection"
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="tgt-left"
+        style={{ top: "65%" }}
+        className={HANDLE_STYLE_TARGET}
+        title="Incoming connection"
+      />
+
+      {/* ── Right handles ── */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="src-right"
+        style={{ top: "35%" }}
+        className={HANDLE_STYLE_SOURCE}
+        title="Outgoing connection"
+      />
+      <Handle
+        type="target"
+        position={Position.Right}
+        id="tgt-right"
+        style={{ top: "65%" }}
+        className={HANDLE_STYLE_TARGET}
+        title="Incoming connection"
+      />
 
       <div className="p-3">
         <div className="flex items-center gap-2 mb-2">
@@ -72,8 +125,10 @@ export const AgentNode = memo(({ data, selected }: NodeProps) => {
           {nodeData.expose?.includes("chat") && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400">chat</span>
           )}
-          {nodeData.expose?.includes("tasks") && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400">tasks</span>
+          {actionCount > 0 && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
+              {actionCount} action{actionCount > 1 ? "s" : ""}
+            </span>
           )}
         </div>
       </div>

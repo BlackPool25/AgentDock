@@ -15,14 +15,30 @@ export function canvasToSystemDesign(
 
   const agents: AgentDesign[] = canvas.nodes
     .filter((n) => n.type === "agent")
-    .map((n) => n.data as unknown as AgentDesign);
+    .map((n) => {
+      const d = n.data as unknown as AgentDesign;
+      // Ensure actions array exists (backwards compat with older saved designs)
+      return { ...d, actions: d.actions ?? [] };
+    });
 
-  const connections: ConnectionDesign[] = canvas.edges.map((e) => ({
-    id: e.id,
-    from: e.source,
-    to: e.target,
-    trigger: (e.data?.trigger ?? { type: "task_completion", passOutput: true }) as ConnectionDesign["trigger"],
-  }));
+  const connections: ConnectionDesign[] = canvas.edges.map((e) => {
+    const edgeData = e.data as {
+      trigger?: ConnectionDesign["trigger"];
+      label?: string;
+      description?: string;
+      dataMapping?: Array<{ from: string; to: string }>;
+    } | undefined;
+
+    return {
+      id: e.id,
+      from: e.source,
+      to: e.target,
+      label: edgeData?.label || undefined,
+      description: edgeData?.description || undefined,
+      dataMapping: edgeData?.dataMapping ?? [],
+      trigger: edgeData?.trigger ?? { type: "task_completion", passOutput: true },
+    };
+  });
 
   // Validate agents
   const agentIds = new Set(agents.map((a) => a.id));

@@ -16,6 +16,20 @@ export const MCPConfigSchema = z.object({
   env: z.record(z.string()).default({}),
 });
 
+// ─── Agent Action: a named task the agent can execute when triggered ───────────
+export const AgentActionSchema = z.object({
+  name: z.string().min(1),                          // e.g. "analyse_request"
+  description: z.string().default(""),
+  // JSON Schema for the input payload this action expects
+  inputSchema: z.record(z.unknown()).default({}),
+  // JSON Schema for the output this action produces
+  outputSchema: z.record(z.unknown()).default({}),
+  // Prompt template — use {{input.field}} placeholders
+  promptTemplate: z.string().default(""),
+  // Where to write the output (relative to /memory)
+  outputFile: z.string().optional(),               // e.g. "analysis.md"
+});
+
 export const AgentDesignSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/, "ID must be lowercase alphanumeric with hyphens"),
   name: z.string().min(1),
@@ -38,6 +52,8 @@ export const AgentDesignSchema = z.object({
     pythonPackages: z.array(z.string()).default([]),
     systemPackages: z.array(z.string()).default([]),
   }),
+  // Named actions this agent can perform
+  actions: z.array(AgentActionSchema).default([]),
   triggers: z.array(
     z.discriminatedUnion("type", [
       z.object({ type: z.literal("task") }),
@@ -48,10 +64,21 @@ export const AgentDesignSchema = z.object({
   expose: z.array(z.enum(["logs", "chat", "memory", "status", "tasks"])).default(["status", "logs"]),
 });
 
+// ─── Data mapping: maps output fields from source agent to input fields of target ─
+export const DataMappingSchema = z.array(z.object({
+  from: z.string(),   // source field path, e.g. "output.report"
+  to: z.string(),     // target field path, e.g. "input.document"
+})).default([]);
+
 export const ConnectionDesignSchema = z.object({
   id: z.string(),
   from: z.string(),
   to: z.string(),
+  // Human-readable label shown on the edge
+  label: z.string().optional(),
+  description: z.string().optional(),
+  // Field-level data mapping from source output to target input
+  dataMapping: DataMappingSchema,
   trigger: z.discriminatedUnion("type", [
     z.object({ type: z.literal("task_completion"), passOutput: z.boolean().default(true) }),
     z.object({
@@ -116,6 +143,14 @@ export const AgentConfigSchema = z.object({
     python_packages: z.array(z.string()).default([]),
     system_packages: z.array(z.string()).default([]),
   }).default({}),
+  actions: z.array(z.object({
+    name: z.string(),
+    description: z.string().optional(),
+    input_schema: z.record(z.unknown()).default({}),
+    output_schema: z.record(z.unknown()).default({}),
+    prompt_template: z.string().optional(),
+    output_file: z.string().optional(),
+  })).default([]),
   triggers: z.array(
     z.discriminatedUnion("type", [
       z.object({ type: z.literal("task") }),
@@ -142,6 +177,9 @@ export const WorkflowConfigSchema = z.object({
     id: z.string(),
     from: z.string(),
     to: z.string(),
+    label: z.string().optional(),
+    description: z.string().optional(),
+    data_mapping: z.array(z.object({ from: z.string(), to: z.string() })).default([]),
     trigger: z.discriminatedUnion("type", [
       z.object({ type: z.literal("task_completion"), pass_output: z.boolean().default(true) }),
       z.object({ type: z.literal("cron"), schedule: z.string(), timezone: z.string().default("UTC") }),
@@ -162,6 +200,7 @@ export const WorkflowConfigSchema = z.object({
 
 export type SystemDesign = z.infer<typeof SystemDesignSchema>;
 export type AgentDesign = z.infer<typeof AgentDesignSchema>;
+export type AgentAction = z.infer<typeof AgentActionSchema>;
 export type ConnectionDesign = z.infer<typeof ConnectionDesignSchema>;
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 export type WorkflowConfig = z.infer<typeof WorkflowConfigSchema>;

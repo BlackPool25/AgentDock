@@ -36,6 +36,15 @@ export function generateAgentConfig(agent: AgentDesign): string {
       python_packages: agent.tools.pythonPackages,
       system_packages: agent.tools.systemPackages,
     },
+    // Named actions this agent can execute when triggered
+    actions: (agent.actions ?? []).map((a) => ({
+      name: a.name,
+      description: a.description || undefined,
+      input_schema: Object.keys(a.inputSchema).length > 0 ? a.inputSchema : undefined,
+      output_schema: Object.keys(a.outputSchema).length > 0 ? a.outputSchema : undefined,
+      prompt_template: a.promptTemplate || undefined,
+      output_file: a.outputFile,
+    })),
     triggers: agent.triggers,
     expose: agent.expose,
     ports: { internal: 8080 },

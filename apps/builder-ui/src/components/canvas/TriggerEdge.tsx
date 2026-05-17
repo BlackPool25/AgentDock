@@ -20,25 +20,36 @@ export const TriggerEdge = memo(
     });
     const edgeData = data as TriggerEdgeDataRecord | undefined;
     const triggerType = edgeData?.trigger?.type ?? "task_completion";
-    const label = TRIGGER_LABELS[triggerType] ?? triggerType;
+    const triggerLabel = TRIGGER_LABELS[triggerType] ?? triggerType;
+    const customLabel = edgeData?.label;
+    const displayLabel = customLabel || triggerLabel;
+
     const color = selected ? "hsl(210 100% 56%)" : "hsl(216 34% 50%)";
+    const markerId = `arrow-${id}`;
 
     return (
       <>
         <defs>
           <marker
-            id={`arrow-${id}`}
-            markerWidth="8" markerHeight="8"
-            refX="6" refY="3"
+            id={markerId}
+            markerWidth="10"
+            markerHeight="10"
+            refX="8"
+            refY="3"
             orient="auto"
+            markerUnits="strokeWidth"
           >
-            <path d="M0,0 L0,6 L8,3 z" fill={color} />
+            <path d="M0,0 L0,6 L9,3 z" fill={color} />
           </marker>
         </defs>
         <BaseEdge
           id={id}
           path={edgePath}
-          style={{ stroke: color, strokeWidth: 2, markerEnd: `url(#arrow-${id})` }}
+          style={{
+            stroke: color,
+            strokeWidth: selected ? 2.5 : 1.8,
+            markerEnd: `url(#${markerId})`,
+          }}
         />
         <EdgeLabelRenderer>
           <div
@@ -49,7 +60,7 @@ export const TriggerEdge = memo(
               selected && "border-primary text-primary"
             )}
           >
-            {label}
+            {displayLabel}
           </div>
         </EdgeLabelRenderer>
       </>
