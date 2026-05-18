@@ -49,7 +49,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         model=config.llm.model,
         temperature=config.llm.temperature,
         max_tokens=config.llm.max_tokens,
-        system_prompt=config.llm.system_prompt or "",
     )
 
     # 6. Task + file receivers — pass config so task_receiver can dispatch actions

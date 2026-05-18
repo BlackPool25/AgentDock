@@ -108,7 +108,8 @@ class RAGManager:
         if not self.enabled:
             return 0
         try:
-            self.collection.delete(where={})  # Clear all
+            if self.collection.count() > 0:
+                self.collection.delete(where={})
             for folder_config in self.config.folders:
                 path = Path(folder_config.path)
                 if path.exists():
