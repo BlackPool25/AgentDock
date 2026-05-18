@@ -2,12 +2,60 @@ import { useState } from "react";
 import { useCanvasStore } from "@/stores/canvas.store.js";
 import { cn } from "@/lib/utils.js";
 import type { AgentDesign, AgentAction } from "@agentdock/config-schema";
+import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 
 const TABS = ["General", "LLM", "Memory", "RAG", "Triggers", "Shell", "MCPs", "Tools", "Actions", "Expose"] as const;
 type Tab = (typeof TABS)[number];
 
 const PROVIDERS = ["ollama", "openai", "anthropic", "gemini", "groq"] as const;
 const EXPOSE_OPTIONS = ["logs", "chat", "memory", "status", "tasks"] as const;
+
+const TOOL_CALL_WARNING_TEMP = 0.5;
+const RECOMMENDED_MODELS: Record<string, string[]> = {
+  ollama: ["qwen2.5:7b", "qwen2.5:14b", "qwen2.5-coder:7b", "llama3.1:8b"],
+  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+  anthropic: ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"],
+  gemini: ["gemini-1.5-pro", "gemini-1.5-flash"],
+  groq: ["llama-3.1-70b-versatile", "mixtral-8x7b-32768"],
+};
+
+function ValidationBadge({ data }: { data: AgentDesign }) {
+  const warnings: string[] = [];
+  const ok: string[] = [];
+
+  if (!data.llm.model.trim()) warnings.push("LLM model is empty");
+  if (data.llm.temperature > TOOL_CALL_WARNING_TEMP && data.shell.enabled) {
+    warnings.push(`Temperature ${data.llm.temperature} is high for tool-calling agents (use ≤0.3)`);
+  }
+  if (!data.actions.length) warnings.push("No actions defined — agent will use default prompt");
+  const hasTrigger = data.triggers.length > 0;
+  if (!hasTrigger) warnings.push("No triggers — agent cannot be activated");
+  if (!data.llm.systemPrompt.trim()) warnings.push("System prompt is empty");
+
+  if (data.actions.length > 0) ok.push(`${data.actions.length} action(s) configured`);
+  if (hasTrigger) ok.push(`${data.triggers.length} trigger(s) active`);
+  if (data.shell.enabled) ok.push("Shell enabled");
+  if (data.mcps.length > 0) ok.push(`${data.mcps.length} MCP(s) connected`);
+
+  if (warnings.length === 0 && ok.length === 0) return null;
+
+  return (
+    <div className="px-4 py-2 border-b border-border bg-muted/30 space-y-1">
+      {warnings.map((w, i) => (
+        <div key={i} className="flex items-start gap-1.5 text-xs text-amber-400">
+          <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+          <span>{w}</span>
+        </div>
+      ))}
+      {ok.map((o, i) => (
+        <div key={i} className="flex items-start gap-1.5 text-xs text-green-400">
+          <CheckCircle2 className="w-3 h-3 shrink-0 mt-0.5" />
+          <span>{o}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
   const [tab, setTab] = useState<Tab>("General");
@@ -25,6 +73,8 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
         <p className="text-sm font-semibold">Agent Config</p>
         <p className="text-xs text-muted-foreground font-mono">{data.id}</p>
       </div>
+
+      <ValidationBadge data={data} />
 
       {/* Tabs */}
       <div className="flex gap-1 px-3 pt-2 flex-wrap">
@@ -45,14 +95,14 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {tab === "General" && (
           <>
-            <Field label="Agent ID">
+            <Field label="Agent ID (lowercase, hyphens)">
               <input
-                className="input"
+                className="input font-mono"
                 value={data.id}
                 onChange={(e) => update({ id: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })}
               />
             </Field>
-            <Field label="Name">
+            <Field label="Display Name">
               <input className="input" value={data.name} onChange={(e) => update({ name: e.target.value })} />
             </Field>
             <Field label="Description">
@@ -78,15 +128,34 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
               </select>
             </Field>
             <Field label="Model">
-              <input className="input" value={data.llm.model} onChange={(e) => update({ llm: { ...data.llm, model: e.target.value } })} />
+              <input className="input font-mono" value={data.llm.model} onChange={(e) => update({ llm: { ...data.llm, model: e.target.value } })} />
+              {RECOMMENDED_MODELS[data.llm.provider] && (
+                <div className="mt-1">
+                  <p className="text-[10px] text-muted-foreground mb-1">Recommended:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {RECOMMENDED_MODELS[data.llm.provider].map((m) => (
+                      <button
+                        key={m}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 transition-colors"
+                        onClick={() => update({ llm: { ...data.llm, model: m } })}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Field>
-            <Field label={`Temperature (${data.llm.temperature})`}>
+            <Field label={`Temperature (${data.llm.temperature.toFixed(1)})`}>
               <input
                 type="range" min="0" max="2" step="0.1"
                 value={data.llm.temperature}
                 onChange={(e) => update({ llm: { ...data.llm, temperature: parseFloat(e.target.value) } })}
                 className="w-full accent-primary"
               />
+              {data.llm.temperature > TOOL_CALL_WARNING_TEMP && (
+                <p className="text-[10px] text-amber-400 mt-1">⚠ High temperature may cause malformed tool call JSON. Use ≤0.3 for tool-calling agents.</p>
+              )}
             </Field>
             <Field label="Max Tokens">
               <input
@@ -99,6 +168,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
               <textarea
                 className="input resize-none font-mono text-xs"
                 rows={6}
+                placeholder="You are a helpful assistant..."
                 value={data.llm.systemPrompt}
                 onChange={(e) => update({ llm: { ...data.llm, systemPrompt: e.target.value } })}
               />
@@ -180,19 +250,35 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
         )}
 
         {tab === "Shell" && (
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={data.shell.enabled}
-              onChange={(e) => update({ shell: { enabled: e.target.checked } })}
-              className="accent-primary"
-            />
-            <span className="text-sm">Enable shell access</span>
-          </label>
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={data.shell.enabled}
+                onChange={(e) => update({ shell: { enabled: e.target.checked } })}
+                className="accent-primary"
+              />
+              <span className="text-sm">Enable shell access</span>
+            </label>
+            {data.shell.enabled && (
+              <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 space-y-1">
+                <div className="flex items-center gap-1.5 text-amber-400">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium">Security Warning</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Shell access allows the agent to execute commands on the host. Only enable for trusted agents.
+                </p>
+              </div>
+            )}
+          </div>
         )}
 
         {tab === "MCPs" && (
           <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              MCP servers provide external tools this agent can use (web search, file access, etc).
+            </p>
             {(data.mcps || []).map((mcp, i) => (
               <div key={i} className="p-3 rounded border border-border space-y-2">
                 <div className="flex items-center justify-between">
@@ -317,6 +403,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
               <textarea
                 className="input resize-none font-mono text-xs"
                 rows={4}
+                placeholder="requests\nbeautifulsoup4"
                 value={data.tools.pythonPackages.join("\n")}
                 onChange={(e) => update({ tools: { ...data.tools, pythonPackages: e.target.value.split("\n").filter(Boolean) } })}
               />
@@ -325,6 +412,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
               <textarea
                 className="input resize-none font-mono text-xs"
                 rows={3}
+                placeholder="curl\njq"
                 value={data.tools.systemPackages.join("\n")}
                 onChange={(e) => update({ tools: { ...data.tools, systemPackages: e.target.value.split("\n").filter(Boolean) } })}
               />
@@ -342,7 +430,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
 
         {tab === "Expose" && (
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Select which endpoints are accessible via API key</p>
+            <p className="text-xs text-muted-foreground">Select which endpoints are accessible via the orchestrator proxy</p>
             {EXPOSE_OPTIONS.map((opt) => (
               <label key={opt} className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -387,7 +475,7 @@ function TriggersTab({
   const addTrigger = (type: "webhook" | "cron" | "task") => {
     let newTrigger: any = { type };
     if (type === "cron") {
-      newTrigger = { ...newTrigger, schedule: "* * * * *", timezone: "UTC" };
+      newTrigger = { ...newTrigger, schedule: "0 9 * * 1-5", timezone: "UTC", actionName: "" };
     }
     update({ triggers: [...triggers, newTrigger] });
   };
@@ -402,9 +490,14 @@ function TriggersTab({
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">
-        Triggers define how this agent is activated from outside the pipeline.
-      </p>
+      <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20">
+        <div className="flex items-start gap-1.5">
+          <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-[10px] text-muted-foreground">
+            Triggers define how this agent is activated. <strong>At least one trigger is required</strong> for the agent to respond to events.
+          </p>
+        </div>
+      </div>
 
       {triggers.map((trigger, i) => (
         <div key={i} className="p-3 rounded border border-border space-y-2 relative">
@@ -457,7 +550,11 @@ function TriggersTab({
           )}
 
           {trigger.type === "task" && (
-            <p className="text-xs italic text-muted-foreground">Internal task trigger. Always active.</p>
+            <div className="p-2 rounded bg-muted/50">
+              <p className="text-xs text-muted-foreground">
+                Internal task trigger. This agent can receive tasks from other agents via the orchestrator.
+              </p>
+            </div>
           )}
         </div>
       ))}
@@ -465,6 +562,7 @@ function TriggersTab({
       <div className="flex gap-2">
         <button className="btn btn-secondary flex-1 text-[10px] h-7" onClick={() => addTrigger("webhook")}>+ Webhook</button>
         <button className="btn btn-secondary flex-1 text-[10px] h-7" onClick={() => addTrigger("cron")}>+ Cron</button>
+        <button className="btn btn-secondary flex-1 text-[10px] h-7" onClick={() => addTrigger("task")}>+ Task</button>
       </div>
     </div>
   );
@@ -562,9 +660,14 @@ function ActionsTab({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        Actions are named tasks this agent executes when triggered. Each action has a prompt template and optional output file.
-      </p>
+      <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20">
+        <div className="flex items-start gap-1.5">
+          <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-[10px] text-muted-foreground">
+            Actions are named tasks this agent executes when triggered. Each action needs a <strong>prompt template</strong> and an <strong>output file</strong> to trigger downstream agents.
+          </p>
+        </div>
+      </div>
 
       {actions.map((action, i) => (
         <div key={i} className="p-3 rounded border border-border space-y-2">
@@ -601,16 +704,19 @@ function ActionsTab({
               value={action.promptTemplate}
               onChange={(e) => updateAction(i, { promptTemplate: e.target.value })}
             />
-            <p className="text-xs text-muted-foreground mt-1">Use {"{{input.field}}"} for input placeholders.</p>
+            <p className="text-xs text-muted-foreground mt-1">Use {"{{input.field}}"} for input placeholders. {"{{input.request}}"} is always available.</p>
           </Field>
 
-          <Field label="Output File (optional, relative to /memory)">
+          <Field label="Output File (relative to /memory)">
             <input
               className="input text-xs font-mono"
               placeholder="analysis.md"
               value={action.outputFile ?? ""}
               onChange={(e) => updateAction(i, { outputFile: e.target.value || undefined })}
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              When set, writing this file triggers downstream agents with <code>file_received</code> connections.
+            </p>
           </Field>
         </div>
       ))}

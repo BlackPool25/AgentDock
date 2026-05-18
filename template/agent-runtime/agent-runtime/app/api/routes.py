@@ -34,7 +34,7 @@ class _RingBufferProcessor:
     def __call__(self, logger: Any, method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
         level = method if method in ("debug", "info", "warning", "error", "critical") else "info"
         message = str(event_dict.get("event", ""))
-        extra = {k: v for k, v in event_dict.items() if k not in ("event", "_record", "level")}
+        extra = {k: v for k, v in event_dict.items() if k not in ("event", "_record", "level", "message")}
         _capture_log(level, message, **extra)
         return event_dict
 

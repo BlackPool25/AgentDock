@@ -70,7 +70,7 @@ class AgentLoop:
             assistant_msg: dict[str, Any] = {"role": "assistant", "content": response.content}
             if response.tool_calls:
                 assistant_msg["tool_calls"] = [
-                    {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": tc.arguments}}
+                    {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": __import__("json").dumps(tc.arguments)}}
                     for tc in response.tool_calls
                 ]
             messages.append(assistant_msg)

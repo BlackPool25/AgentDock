@@ -126,7 +126,7 @@ class TaskReceiver:
     async def _run_loop(self, task_id: str, payload: TaskPayload, action: Any) -> None:
         """Run the agentic loop as a background task."""
         try:
-            from .agent_loop import AgentLoop
+            from ..llm.agent_loop import AgentLoop
             system_prompt = (self.config.llm.system_prompt or "") if self.config else ""
             if action and action.prompt_template:
                 system_prompt = self._render_template(action.prompt_template, payload)

@@ -45,11 +45,13 @@ class TaskRecord(BaseModel):
 
 
 class TaskReceiver:
-    def __init__(self, memory_manager: Any, llm_client: Any, config: Any = None, rag_manager: Optional[Any] = None) -> None:
+    def __init__(self, memory_manager: Any, llm_client: Any, config: Any = None, rag_manager: Optional[Any] = None, mcp_manager: Optional[Any] = None, shell_executor: Optional[Any] = None) -> None:
         self.memory = memory_manager
         self.llm = llm_client
         self.config = config
         self.rag = rag_manager
+        self.mcp = mcp_manager
+        self.shell = shell_executor
         self._pending: dict[str, TaskPayload] = {}
         self._pending_action: dict[str, Any] = {}
         self._tasks: list[TaskRecord] = []
@@ -126,11 +128,11 @@ class TaskReceiver:
     async def _run_loop(self, task_id: str, payload: TaskPayload, action: Any) -> None:
         """Run the agentic loop as a background task."""
         try:
-            from .agent_loop import AgentLoop
+            from ..llm.agent_loop import AgentLoop
             system_prompt = (self.config.llm.system_prompt or "") if self.config else ""
             if action and action.prompt_template:
                 system_prompt = self._render_template(action.prompt_template, payload)
-            loop = AgentLoop(self.llm, self.config, self.rag)
+            loop = AgentLoop(self.llm, self.mcp, self.shell, self.config, self.rag)
             output = await loop.run(payload, system_prompt)
             await self.complete(task_id, output)
         except Exception as e:

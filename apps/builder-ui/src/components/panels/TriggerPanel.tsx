@@ -1,14 +1,15 @@
 import { useCanvasStore } from "@/stores/canvas.store.js";
 import type { ConnectionDesign } from "@agentdock/config-schema";
+import { Info, AlertTriangle } from "lucide-react";
 
 type TriggerType = ConnectionDesign["trigger"]["type"];
 
-const TRIGGER_TYPES: { value: TriggerType; label: string }[] = [
-  { value: "task_completion", label: "Task Completion" },
-  { value: "cron", label: "Cron Schedule" },
-  { value: "webhook", label: "Webhook" },
-  { value: "memory_condition", label: "Memory Condition" },
-  { value: "file_received", label: "File Received" },
+const TRIGGER_TYPES: { value: TriggerType; label: string; icon: string; description: string }[] = [
+  { value: "task_completion", label: "Task Completion", icon: "✅", description: "Fires when source agent completes any task" },
+  { value: "file_received", label: "File Received", icon: "📄", description: "Fires when source agent writes a matching file to memory" },
+  { value: "cron", label: "Cron Schedule", icon: "⏰", description: "Fires on a schedule, independent of agents" },
+  { value: "webhook", label: "Webhook", icon: "🌐", description: "Fires when an external HTTP POST hits the webhook URL" },
+  { value: "memory_condition", label: "Memory Condition", icon: "🔍", description: "Fires when a memory file contains a specific string" },
 ];
 
 export function TriggerPanel({ edgeId }: { edgeId: string }) {
@@ -18,8 +19,11 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
 
   if (!edge) return null;
 
-  const sourceName = (nodes.find((n) => n.id === edge.source)?.data as { name?: string })?.name ?? edge.source;
-  const targetName = (nodes.find((n) => n.id === edge.target)?.data as { name?: string })?.name ?? edge.target;
+  const sourceNode = nodes.find((n) => n.id === edge.source);
+  const targetNode = nodes.find((n) => n.id === edge.target);
+  const sourceName = (sourceNode?.data as { name?: string })?.name ?? edge.source;
+  const targetName = (targetNode?.data as { name?: string })?.name ?? edge.target;
+  const sourceData = sourceNode?.data as { actions?: { name: string; outputFile?: string }[] };
 
   const edgeData = edge.data as {
     trigger?: ConnectionDesign["trigger"];
@@ -58,10 +62,14 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
   const removeMapping = (i: number) =>
     updateEdgeData(edgeId, { dataMapping: dataMapping.filter((_, idx) => idx !== i) });
 
+  // Show warning if file_received trigger but source agent has no actions with output_file
+  const hasOutputFile = sourceData?.actions?.some(a => a.outputFile) ?? false;
+  const showFileWarning = trigger.type === "file_received" && !hasOutputFile;
+
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 border-b border-border">
-        <p className="text-sm font-semibold">Connection</p>
+        <p className="text-sm font-semibold">Connection Trigger</p>
         <p className="text-xs text-muted-foreground font-mono truncate">{sourceName} → {targetName}</p>
       </div>
 
@@ -88,7 +96,7 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
           />
         </div>
 
-        {/* Trigger type */}
+        {/* Trigger type selector with descriptions */}
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">Trigger Type</label>
           <select
@@ -97,21 +105,53 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
             onChange={(e) => setTriggerType(e.target.value as TriggerType)}
           >
             {TRIGGER_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
+              <option key={t.value} value={t.value}>{t.icon} {t.label}</option>
             ))}
           </select>
+          <p className="text-[10px] text-muted-foreground">
+            {TRIGGER_TYPES.find(t => t.value === trigger.type)?.description}
+          </p>
         </div>
 
+        {/* File received warning */}
+        {showFileWarning && (
+          <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30">
+            <div className="flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[10px] text-amber-400">
+                <strong>{sourceName}</strong> has no actions with an <code>output_file</code>. This trigger will never fire unless the agent writes a matching file to memory.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Trigger-specific config */}
         {trigger.type === "task_completion" && (
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={trigger.passOutput}
-              onChange={(e) => updateTrigger({ ...trigger, passOutput: e.target.checked })}
-              className="accent-primary"
-            />
-            <span className="text-sm">Pass output to next agent</span>
-          </label>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={trigger.passOutput}
+                onChange={(e) => updateTrigger({ ...trigger, passOutput: e.target.checked })}
+                className="accent-primary"
+              />
+              <span className="text-sm">Pass output to next agent</span>
+            </label>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Action Filter (Optional)</label>
+              <select
+                className="input w-full text-xs"
+                value={(trigger as any).actionFilter || ""}
+                onChange={(e) => updateTrigger({ ...trigger, actionFilter: e.target.value || undefined })}
+              >
+                <option value="">(All actions)</option>
+                {sourceData?.actions?.map(a => (
+                  <option key={a.name} value={a.name}>{a.name}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-muted-foreground">Only fire when source agent completes this specific action</p>
+            </div>
+          </div>
         )}
 
         {trigger.type === "cron" && (
@@ -138,10 +178,12 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
         )}
 
         {trigger.type === "webhook" && (
-          <p className="text-xs text-muted-foreground">
-            Webhook URL will be available at deployment:<br />
-            <code className="font-mono text-primary">POST /webhooks/&#123;api-key&#125;</code>
-          </p>
+          <div className="p-2 rounded bg-muted/50">
+            <p className="text-xs text-muted-foreground">
+              Webhook URL will be available at deployment:<br />
+              <code className="font-mono text-primary text-xs">POST /webhooks/{targetName}</code>
+            </p>
+          </div>
         )}
 
         {trigger.type === "file_received" && (
@@ -151,11 +193,19 @@ export function TriggerPanel({ edgeId }: { edgeId: string }) {
               className="input font-mono"
               value={trigger.filePattern}
               onChange={(e) => updateTrigger({ ...trigger, filePattern: e.target.value })}
-              placeholder="* or report-*.md"
+              placeholder="report.md or *.md"
             />
             <p className="text-xs text-muted-foreground">
-              Triggers when the source agent writes a matching file to its memory.
+              Triggers when <strong>{sourceName}</strong> writes a matching file to its memory.
             </p>
+            {hasOutputFile && (
+              <div className="mt-1">
+                <p className="text-[10px] text-green-400">✓ {sourceName} has actions with output files:</p>
+                {sourceData?.actions?.filter(a => a.outputFile).map(a => (
+                  <p key={a.name} className="text-[10px] font-mono text-green-400 ml-2">→ {a.outputFile}</p>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

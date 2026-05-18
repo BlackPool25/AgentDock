@@ -115,6 +115,117 @@ The builder stores all designs in SQLite and keeps versioned generations in `app
 
 ---
 
+## Guide: Configuring Agent Systems
+
+### Understanding the Pipeline Flow
+
+An AgentDock system is a **pipeline of agents** connected by **triggers**. Data flows from left to right:
+
+```
+[Webhook/Cron] → [Agent A] --file_received: report.md--> [Agent B] --task_completion--> [Agent C]
+```
+
+Each agent processes input, performs work (LLM calls, shell commands, MCP tools), writes output to memory, and triggers the next agent.
+
+### Essential Configuration Checklist
+
+Every agent **must** have these configured to function:
+
+| Config | Where | Why |
+|---|---|---|
+| **LLM Model** | LLM tab | The AI brain — without this the agent can't think |
+| **System Prompt** | LLM tab | Tells the agent who it is and what to do |
+| **At least 1 Trigger** | Triggers tab | How the agent gets activated |
+| **Actions (for pipelines)** | Actions tab | Named tasks with prompt templates and output files |
+
+### Triggers — How Agents Get Activated
+
+| Trigger Type | Use Case | Config |
+|---|---|---|
+| **Webhook** | External systems start the pipeline | Set on the first agent. URL: `/webhooks/{agent-id}` |
+| **Cron** | Scheduled recurring tasks | Set cron expression + timezone |
+| **Task** | Receives tasks from other agents | Always active — just add it |
+
+### Connections — How Agents Talk to Each Other
+
+Connections are drawn by dragging from one agent's handle to another. Each connection has a **trigger type**:
+
+| Connection Trigger | When It Fires | Best For |
+|---|---|---|
+| **Task Completion** | Source agent finishes any task | Simple handoff between agents |
+| **File Received** | Source writes a specific file to memory | **Recommended for pipelines** — explicit, reliable |
+| **Memory Condition** | A memory file contains a string | Polling-based state changes |
+
+### Actions — The Key to Reliable Pipelines
+
+**Actions are the most important concept for building working pipelines.**
+
+An action is a named task with:
+1. **Name** — snake_case identifier (e.g., `investigate_alert`)
+2. **Prompt Template** — instructions using `{{input.request}}` placeholders
+3. **Output File** — where results are written (e.g., `threat-report.md`)
+
+**Why actions matter:** When an action has an `output_file`, writing that file triggers any downstream agent connected with a `file_received` trigger. This is the most reliable way to chain agents.
+
+#### Example: 3-Agent Security Pipeline
+
+```
+Sentry (webhook trigger)
+  └─ Action: "investigate_logs"
+     └─ Output file: "alert.md"
+        │
+        ▼ file_received: alert.md
+Investigator (task trigger)
+  └─ Action: "research_threat"
+     └─ Output file: "threat-report.md"
+        │
+        ▼ file_received: threat-report.md
+Responder (task trigger)
+  └─ Action: "remediate"
+     └─ Output file: "resolution.md"
+```
+
+**Step-by-step setup:**
+1. Create Sentry agent → Add webhook trigger → Add action `investigate_logs` with output file `alert.md`
+2. Create Investigator agent → Add task trigger → Add action `research_threat` with output file `threat-report.md`
+3. Create Responder agent → Add task trigger → Add action `remediate` with output file `resolution.md`
+4. Connect Sentry → Investigator with `file_received` trigger, pattern `alert.md`
+5. Connect Investigator → Responder with `file_received` trigger, pattern `threat-report.md`
+
+### LLM Provider Configuration
+
+| Provider | Setup | Recommended Models |
+|---|---|---|
+| **Ollama** | Set `OLLAMA_SERVERS=http://host.docker.internal:11434` in `.env` | `qwen2.5:7b`, `qwen2.5:14b`, `qwen2.5-coder:7b` |
+| **OpenAI** | Set `OPENAI_API_KEY` in `.env` | `gpt-4o`, `gpt-4o-mini` |
+| **Anthropic** | Set `ANTHROPIC_API_KEY` in `.env` | `claude-3-5-sonnet-20241022` |
+| **Gemini** | Set `GEMINI_API_KEY` in `.env` | `gemini-1.5-pro` |
+| **Groq** | Set `GROQ_API_KEY` in `.env` | `llama-3.1-70b-versatile` |
+
+**Temperature:** Use `0.1–0.3` for agents that call tools (shell, MCP). Higher temperatures cause malformed tool call JSON.
+
+### Common Pitfalls
+
+| Problem | Cause | Fix |
+|---|---|---|
+| Agent never activates | No trigger configured | Add webhook/task/cron trigger |
+| Downstream agent never triggers | No `output_file` on action | Add output file matching the `file_received` pattern |
+| Agent produces garbage output | Temperature too high | Set temperature to 0.1–0.3 |
+| Tool calls fail | Model doesn't support tools | Use `qwen2.5` or `llama3.1` for Ollama |
+| Pipeline loops infinitely | No `action_filter` on connection | Set action filter to specific action name |
+
+### Validation
+
+The builder validates your pipeline before generating. Errors (red) block generation; warnings (amber) allow it but flag potential issues. Common validations:
+
+- Empty LLM model → error
+- No triggers → error
+- `file_received` connection but no `output_file` → error
+- Empty system prompt → warning
+- High temperature for tool-calling → warning
+
+---
+
 ## Running a Generated System
 
 1. Unzip the generated project.

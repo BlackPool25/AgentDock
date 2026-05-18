@@ -51,15 +51,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         max_tokens=config.llm.max_tokens,
     )
 
-    # 6. Task + file receivers — pass config so task_receiver can dispatch actions
-    task_receiver = TaskReceiver(memory, llm, config, rag)
-    file_receiver = FileReceiver(memory, rag)
-
     # 6. MCP
     mcp = MCPClientManager(config.mcps)
     await mcp.start()
 
-    # 7. Scheduler
+    # 7. Task + file receivers — pass config so task_receiver can dispatch actions
+    task_receiver = TaskReceiver(memory, llm, config, rag, mcp, shell)
+    file_receiver = FileReceiver(memory, rag)
+
+    # 8. Scheduler
     scheduler = AgentScheduler()
     await scheduler.start(config.triggers, lambda msg: task_receiver.receive(
         TaskPayload(instruction=msg, senderId="scheduler")

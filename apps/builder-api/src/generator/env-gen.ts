@@ -38,6 +38,7 @@ export function generateEnvExample(design: SystemDesign): string {
   }
 
   lines.push("# ── Agents ────────────────────────────────────────────────────────────────");
+  lines.push("# Configure OLLAMA_SERVERS above, then set each agent's model in configs/agents/{id}.yaml");
   for (const agent of design.agents) {
     lines.push(`# ${agent.name} (${agent.id}) — provider: ${agent.llm.provider}, model: ${agent.llm.model}`);
   }
