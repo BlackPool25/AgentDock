@@ -109,18 +109,8 @@ export async function handleTaskCompletion(
   workflow: WorkflowConfig,
   actionName?: string,
 ) {
-  wsHub.broadcast({
-    type: "agent:task:completed",
-    agentId: fromAgentId,
-    systemId: SYSTEM_ID,
-    taskId,
-    output,
-    timestamp: new Date().toISOString(),
-  });
-
   for (const conn of workflow.connections) {
     if (conn.from === fromAgentId && conn.trigger.type === "task_completion") {
-      // If action_filter is set, only fire when the completed action matches
       if (conn.trigger.action_filter && conn.trigger.action_filter !== actionName) {
         continue;
       }
@@ -139,14 +129,6 @@ export async function handleFileWritten(
   content: string,
   workflow: WorkflowConfig
 ) {
-  wsHub.broadcast({
-    type: "agent:memory:updated",
-    agentId: fromAgentId,
-    systemId: SYSTEM_ID,
-    file: filename,
-    timestamp: new Date().toISOString(),
-  });
-
   for (const conn of workflow.connections) {
     if (conn.from !== fromAgentId || conn.trigger.type !== "file_received") continue;
     const pattern = conn.trigger.file_pattern ?? "*";

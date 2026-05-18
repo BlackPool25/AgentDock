@@ -24,6 +24,7 @@ export function generateCompose(design: SystemDesign): string {
     environment: [
       "SYSTEM_ID=${SYSTEM_ID}",
       "JWT_SECRET=${JWT_SECRET}",
+      "API_PASSWORD=${API_PASSWORD}",
       "REDIS_URL=redis://redis:6379",
       "LLM_GATEWAY_URL=http://llm-gateway:5000",
       `AGENT_NAMES=${design.agents.map((a) => a.id).join(",")}`,
