@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Optional
 import structlog
 
 if TYPE_CHECKING:
@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from ..config.schema import AgentConfig
     from ..shell.executor import ShellExecutor
     from ..mcp.client import MCPClientManager
+    from ..rag.manager import RAGManager
 
 log = structlog.get_logger()
 
@@ -21,11 +22,13 @@ class AgentLoop:
         mcp_manager: "MCPClientManager",
         shell: "ShellExecutor",
         config: "AgentConfig",
+        rag_manager: Optional["RAGManager"] = None,
     ) -> None:
         self.gateway = gateway
         self.mcp = mcp_manager
         self.shell = shell
         self.config = config
+        self.rag = rag_manager
 
     async def run(self, task: "TaskPayload", system_prompt: str) -> str:
         """
@@ -46,10 +49,15 @@ class AgentLoop:
         if self.config.shell.enabled:
             all_tools.append(self._build_shell_tool_definition())
 
-        # 3. Build initial message history
-        messages = self._build_initial_messages(task, system_prompt)
+        # 3. Retrieve relevant RAG context for this task
+        rag_context = ""
+        if self.rag:
+            rag_context = await self.rag.query(task.instruction)
 
-        # 4. THE LOOP
+        # 4. Build initial message history
+        messages = self._build_initial_messages(task, system_prompt, rag_context)
+
+        # 5. THE LOOP
         for round_num in range(MAX_TOOL_ROUNDS):
             log.info("agent_loop.round", round=round_num, task_id=task.taskId)
 
@@ -107,9 +115,15 @@ class AgentLoop:
             log.error("agent_loop.tool_error", tool=tool_call.name, error=str(e))
             return f"Tool error: {str(e)}"
 
-    def _build_initial_messages(self, task: "TaskPayload", system_prompt: str) -> list[dict[str, Any]]:
+    def _build_initial_messages(self, task: "TaskPayload", system_prompt: str, rag_context: str = "") -> list[dict[str, Any]]:
         import base64
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+
+        if rag_context:
+            messages.append({
+                "role": "system",
+                "content": f"Relevant context from your knowledge base:\n\n{rag_context}"
+            })
 
         # Include information about attached files
         if task.attachedFiles:

@@ -43,6 +43,23 @@ class TriggerConfig(BaseModel):
     timezone: str = "UTC"
 
 
+class RAGFolderConfig(BaseModel):
+    path: str
+    auto_index: bool = True
+    file_types: list[str] = Field(default_factory=lambda: [".md", ".txt", ".pdf"])
+    exclude_files: list[str] = Field(default_factory=list)
+
+
+class RAGConfig(BaseModel):
+    enabled: bool = False
+    embedding_model: str = "all-MiniLM-L6-v2"
+    folders: list[RAGFolderConfig] = Field(default_factory=list)
+    max_file_size_kb: int = 500
+    top_k: int = 5
+    chunk_size: int = 500
+    chunk_overlap: int = 50
+
+
 class ActionConfig(BaseModel):
     name: str
     description: Optional[str] = None
@@ -66,6 +83,7 @@ class AgentConfig(BaseModel):
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     llm: LLMConfig
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    rag: RAGConfig = Field(default_factory=RAGConfig)
     shell: ShellConfig = Field(default_factory=ShellConfig)
     mcps: list[MCPServerConfig] = Field(default_factory=list)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
@@ -73,3 +91,4 @@ class AgentConfig(BaseModel):
     triggers: list[TriggerConfig] = Field(default_factory=lambda: [TriggerConfig(type="task")])
     expose: list[str] = Field(default_factory=lambda: ["status", "logs"])
     ports: dict[str, int] = Field(default_factory=lambda: {"internal": 8080})
+

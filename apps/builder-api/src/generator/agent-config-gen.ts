@@ -24,13 +24,14 @@ export function generateAgentConfig(agent: AgentDesign): string {
       git_auto_commit: agent.memory.gitAutoCommit,
       readable_by: agent.memory.readableBy,
     },
+    rag: agent.rag || undefined,
     shell: { enabled: agent.shell.enabled },
     mcps: agent.mcps.map((mcp) => ({
       name: mcp.name,
       transport: mcp.transport,
       url: mcp.url,
       command: mcp.command,
-      env: mcp.env,
+      env: mcp.env || {},
     })),
     tools: {
       python_packages: agent.tools.pythonPackages,

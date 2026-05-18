@@ -30,6 +30,35 @@ export const AgentActionSchema = z.object({
   outputFile: z.string().optional(),               // e.g. "analysis.md"
 });
 
+export const RAGConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  embedding_model: z.string().default("all-MiniLM-L6-v2"),
+  folders: z.array(z.object({
+    path: z.string(),
+    auto_index: z.boolean().default(true),
+    file_types: z.array(z.string()).default([".md", ".txt", ".pdf"]),
+    exclude_files: z.array(z.string()).default([]),
+  })).default([]),
+  max_file_size_kb: z.number().int().default(500),
+  top_k: z.number().int().default(5),
+  chunk_size: z.number().int().default(500),
+  chunk_overlap: z.number().int().default(50),
+});
+
+export const TriggerConfigSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("task") }),
+  z.object({ 
+    type: z.literal("cron"), 
+    schedule: z.string().min(1), 
+    timezone: z.string().default("UTC"),
+    actionName: z.string().optional() 
+  }),
+  z.object({ 
+    type: z.literal("webhook"),
+    actionName: z.string().optional()
+  }),
+]);
+
 export const AgentDesignSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/, "ID must be lowercase alphanumeric with hyphens"),
   name: z.string().min(1),
@@ -46,6 +75,7 @@ export const AgentDesignSchema = z.object({
     gitAutoCommit: z.boolean().default(true),
     readableBy: z.array(z.string()).default([]),
   }),
+  rag: RAGConfigSchema.default({}),
   shell: z.object({ enabled: z.boolean().default(false) }),
   mcps: z.array(MCPConfigSchema).default([]),
   tools: z.object({
@@ -54,13 +84,7 @@ export const AgentDesignSchema = z.object({
   }),
   // Named actions this agent can perform
   actions: z.array(AgentActionSchema).default([]),
-  triggers: z.array(
-    z.discriminatedUnion("type", [
-      z.object({ type: z.literal("task") }),
-      z.object({ type: z.literal("cron"), schedule: z.string(), timezone: z.string().default("UTC") }),
-      z.object({ type: z.literal("webhook") }),
-    ])
-  ).default([{ type: "task" }]),
+  triggers: z.array(TriggerConfigSchema).default([{ type: "task" }]),
   expose: z.array(z.enum(["logs", "chat", "memory", "status", "tasks"])).default(["status", "logs"]),
 });
 
@@ -131,6 +155,7 @@ export const AgentConfigSchema = z.object({
     git_auto_commit: z.boolean().default(true),
     readable_by: z.array(z.string()).default([]),
   }).default({}),
+  rag: RAGConfigSchema.default({}),
   shell: z.object({ enabled: z.boolean().default(false) }).default({}),
   mcps: z.array(z.object({
     name: z.string(),
@@ -151,13 +176,7 @@ export const AgentConfigSchema = z.object({
     prompt_template: z.string().optional(),
     output_file: z.string().optional(),
   })).default([]),
-  triggers: z.array(
-    z.discriminatedUnion("type", [
-      z.object({ type: z.literal("task") }),
-      z.object({ type: z.literal("cron"), schedule: z.string(), timezone: z.string().default("UTC") }),
-      z.object({ type: z.literal("webhook") }),
-    ])
-  ).default([{ type: "task" }]),
+  triggers: z.array(TriggerConfigSchema).default([{ type: "task" }]),
   expose: z.array(z.enum(["logs", "chat", "memory", "status", "tasks"])).default(["status", "logs"]),
   ports: z.object({ internal: z.number().int().default(8080) }).default({}),
 });

@@ -34,7 +34,7 @@ class _RingBufferProcessor:
 def configure_structlog() -> None:
     structlog.configure(
         processors=[
-            structlog.stdlib.add_log_level,
+            structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso"),
             _RingBufferProcessor(),
             structlog.dev.ConsoleRenderer(),

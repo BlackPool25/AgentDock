@@ -41,7 +41,7 @@ generateRoutes.post("/:id/generate", async (c) => {
     logger.info({ systemId: id, genId, zipPath }, "Generation complete");
 
     // Stream zip as download
-    const projectName = row.name.toLowerCase().replace(/\s+/g, "-");
+    const projectName = row.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
     const filename = `${projectName}-system-v${row.version}.zip`;
 
     c.header("Content-Type", "application/zip");
@@ -72,7 +72,7 @@ generateRoutes.get("/:id/generations/:genId", async (c) => {
   }
 
   const system = db.select().from(systems).where(eq(systems.id, id)).get();
-  const projectName = (system?.name ?? id).toLowerCase().replace(/\s+/g, "-");
+  const projectName = (system?.name ?? id).toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   const filename = `${projectName}-system-v${row.version}.zip`;
 
   c.header("Content-Type", "application/zip");

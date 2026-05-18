@@ -28,6 +28,7 @@ class TaskPayload(BaseModel):
     taskId: Optional[str] = None
     senderId: str = "orchestrator"
     instruction: str
+    actionName: Optional[str] = None
     context: dict[str, Any] = {}
     attachedFiles: list[AttachedFile] = []
 
@@ -44,10 +45,11 @@ class TaskRecord(BaseModel):
 
 
 class TaskReceiver:
-    def __init__(self, memory_manager: Any, llm_client: Any, config: Any = None) -> None:
+    def __init__(self, memory_manager: Any, llm_client: Any, config: Any = None, rag_manager: Optional[Any] = None) -> None:
         self.memory = memory_manager
         self.llm = llm_client
         self.config = config
+        self.rag = rag_manager
         self._pending: dict[str, TaskPayload] = {}
         self._pending_action: dict[str, Any] = {}
         self._tasks: list[TaskRecord] = []
@@ -57,6 +59,13 @@ class TaskReceiver:
     def _pick_action(self, payload: TaskPayload) -> Optional[Any]:
         if not self.config or not self.config.actions:
             return None
+        
+        # If payload explicitly requests an action, use it
+        if payload.actionName:
+            for action in self.config.actions:
+                if action.name == payload.actionName:
+                    return action
+
         if len(self.config.actions) == 1:
             return self.config.actions[0]
         instruction_lower = payload.instruction.lower()
@@ -121,7 +130,7 @@ class TaskReceiver:
             system_prompt = (self.config.llm.system_prompt or "") if self.config else ""
             if action and action.prompt_template:
                 system_prompt = self._render_template(action.prompt_template, payload)
-            loop = AgentLoop(self.llm, self.config)
+            loop = AgentLoop(self.llm, self.config, self.rag)
             output = await loop.run(payload, system_prompt)
             await self.complete(task_id, output)
         except Exception as e:

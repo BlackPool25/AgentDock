@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from .config.loader import load_config
 from .memory.manager import MemoryManager
+from .rag.manager import RAGManager
 from .shell.executor import ShellExecutor
 from .llm.client import LLMClient
 from .communication.task_receiver import TaskReceiver, TaskPayload
@@ -26,28 +27,34 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     config = load_config()
     log.info("config_loaded", agent_id=config.agent.id)
 
-    # 2. Memory
-    memory = MemoryManager(Path(config.memory.path), config.memory.git_auto_commit)
+    # 2. RAG
+    rag = RAGManager(config.rag)
+    if rag.enabled:
+        await rag.force_reindex()
+
+    # 3. Memory
+    memory = MemoryManager(Path(config.memory.path), config.memory.git_auto_commit, rag)
     memory.setup()
 
-    # 3. Shell
+    # 4. Shell
     shell = ShellExecutor(
         config.shell.enabled,
         config.shell.level,
         config.shell.allowed_commands,
     )
 
-    # 4. LLM client
+    # 5. LLM client
     llm = LLMClient(
         provider=config.llm.provider,
         model=config.llm.model,
         temperature=config.llm.temperature,
         max_tokens=config.llm.max_tokens,
+        system_prompt=config.llm.system_prompt or "",
     )
 
-    # 5. Task + file receivers — pass config so task_receiver can dispatch actions
-    task_receiver = TaskReceiver(memory, llm, config)
-    file_receiver = FileReceiver(memory)
+    # 6. Task + file receivers — pass config so task_receiver can dispatch actions
+    task_receiver = TaskReceiver(memory, llm, config, rag)
+    file_receiver = FileReceiver(memory, rag)
 
     # 6. MCP
     mcp = MCPClientManager(config.mcps)

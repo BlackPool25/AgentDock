@@ -17,8 +17,12 @@ export function canvasToSystemDesign(
     .filter((n) => n.type === "agent")
     .map((n) => {
       const d = n.data as unknown as AgentDesign;
-      // Ensure actions array exists (backwards compat with older saved designs)
-      return { ...d, actions: d.actions ?? [] };
+      // Ensure actions array exists and position is copied from node
+      return { 
+        ...d, 
+        actions: d.actions ?? [],
+        position: n.position
+      };
     });
 
   const connections: ConnectionDesign[] = canvas.edges.map((e) => {

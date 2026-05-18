@@ -11,13 +11,26 @@ MAX_TOOL_ROUNDS = 10
 
 
 class AgentLoop:
-    def __init__(self, llm_client: Any, config: Any) -> None:
+    def __init__(self, llm_client: Any, config: Any, rag_manager: Optional[Any] = None) -> None:
         self.llm = llm_client
         self.config = config
+        self.rag = rag_manager
 
     async def run(self, task: "TaskPayload", system_prompt: str) -> str:
         import base64
+        
+        # Query RAG for context
+        rag_context = ""
+        if self.rag:
+            rag_context = await self.rag.query(task.instruction)
+
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+        
+        if rag_context:
+            messages.append({
+                "role": "system", 
+                "content": f"Relevant context from your knowledge base:\n\n{rag_context}"
+            })
 
         # Inline text attachments as context
         for f in task.attachedFiles:

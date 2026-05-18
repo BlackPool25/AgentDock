@@ -76,7 +76,7 @@ export function generateCompose(design: SystemDesign): string {
         "ORCHESTRATOR_URL=http://orchestrator:4000",
         ...(peers ? [`PEER_AGENTS=${peers}`] : []),
         // Inject any MCP env var stubs
-        ...agent.mcps.flatMap((mcp) => Object.keys(mcp.env).map((k) => `${k}=\${${k}:-}`)),
+        ...agent.mcps.flatMap((mcp) => Object.keys(mcp.env || {}).map((k) => `${k}=\${${k}:-}`)),
       ],
       networks: ["agentdock-net"],
       restart: "unless-stopped",

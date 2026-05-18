@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import BaseModel
 import structlog
 
-log = structlog.get_logger()
+from typing import Any, Optional
 
 
 class FilePayload(BaseModel):
@@ -18,8 +18,9 @@ class FilePayload(BaseModel):
 
 
 class FileReceiver:
-    def __init__(self, memory_manager: Any) -> None:
+    def __init__(self, memory_manager: Any, rag_manager: Optional[Any] = None) -> None:
         self.memory = memory_manager
+        self.rag = rag_manager
 
     async def receive(self, payload: FilePayload) -> str:
         dest = Path(f"/storage/received/{payload.senderId}/{payload.filename}")
@@ -31,5 +32,10 @@ class FileReceiver:
             "received_files.md",
             f"- [{ts}] {payload.filename} from {payload.senderId} → {dest}",
         )
+        if self.rag:
+            import asyncio
+            asyncio.create_task(self.rag.index_file(dest))
+
         log.info("file_received", filename=payload.filename, sender=payload.senderId)
         return str(dest)
+

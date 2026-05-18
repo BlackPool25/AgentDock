@@ -3,7 +3,7 @@ import { useCanvasStore } from "@/stores/canvas.store.js";
 import { cn } from "@/lib/utils.js";
 import type { AgentDesign, AgentAction } from "@agentdock/config-schema";
 
-const TABS = ["General", "LLM", "Memory", "Shell", "MCPs", "Tools", "Actions", "Expose"] as const;
+const TABS = ["General", "LLM", "Memory", "RAG", "Triggers", "Shell", "MCPs", "Tools", "Actions", "Expose"] as const;
 type Tab = (typeof TABS)[number];
 
 const PROVIDERS = ["ollama", "openai", "anthropic", "gemini", "groq"] as const;
@@ -110,6 +110,75 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
           <MemoryTab nodeId={nodeId} data={data} update={update} />
         )}
 
+        {tab === "RAG" && (
+          <div className="space-y-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={data.rag?.enabled}
+                onChange={(e) => update({ rag: { ...(data.rag || {}), enabled: e.target.checked } as any })}
+                className="accent-primary"
+              />
+              <span className="text-sm font-medium">Enable RAG</span>
+            </label>
+
+            {data.rag?.enabled && (
+              <div className="space-y-3 pl-6 border-l-2 border-primary/20">
+                <Field label="Embedding Model">
+                  <select
+                    className="input text-xs"
+                    value={data.rag.embedding_model}
+                    onChange={(e) => update({ rag: { ...data.rag, embedding_model: e.target.value } as any })}
+                  >
+                    <option value="all-MiniLM-L6-v2">all-MiniLM-L6-v2 (Fast/CPU)</option>
+                    <option value="all-mpnet-base-v2">all-mpnet-base-v2 (High Quality)</option>
+                  </select>
+                </Field>
+                <div className="flex gap-2">
+                  <Field label="Top K" className="flex-1">
+                    <input
+                      type="number" className="input text-xs"
+                      value={data.rag.top_k}
+                      onChange={(e) => update({ rag: { ...data.rag, top_k: parseInt(e.target.value) || 5 } as any })}
+                    />
+                  </Field>
+                  <Field label="Max File Size (KB)" className="flex-1">
+                    <input
+                      type="number" className="input text-xs"
+                      value={data.rag.max_file_size_kb}
+                      onChange={(e) => update({ rag: { ...data.rag, max_file_size_kb: parseInt(e.target.value) || 500 } as any })}
+                    />
+                  </Field>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold">Indexed Folders</p>
+                  {(data.rag.folders || []).map((folder, fi) => (
+                    <div key={fi} className="p-2 rounded bg-muted/50 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-mono">{folder.path}</span>
+                        <button 
+                          className="text-[10px] text-destructive"
+                          onClick={() => {
+                            const folders = (data.rag.folders || []).filter((_, idx) => idx !== fi);
+                            update({ rag: { ...data.rag, folders } as any });
+                          }}
+                        >Remove</button>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    className="btn btn-secondary w-full text-[10px] h-7"
+                    onClick={() => {
+                      const folders = [...(data.rag.folders || []), { path: "/memory", auto_index: true, file_types: [".md", ".txt"], exclude_files: [] }];
+                      update({ rag: { ...data.rag, folders } as any });
+                    }}
+                  >+ Add Folder</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === "Shell" && (
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -124,7 +193,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
 
         {tab === "MCPs" && (
           <div className="space-y-3">
-            {data.mcps.map((mcp, i) => (
+            {(data.mcps || []).map((mcp, i) => (
               <div key={i} className="p-3 rounded border border-border space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-muted-foreground">MCP {i + 1}</span>
@@ -182,7 +251,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                 )}
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Env vars</p>
-                  {Object.entries(mcp.env).map(([k, v], ei) => (
+                  {Object.entries(mcp.env || {}).map(([k, v], ei) => (
                     <div key={ei} className="flex gap-1">
                       <input
                         className="input text-xs font-mono flex-1"
@@ -191,7 +260,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                         onChange={(e) => {
                           const mcps = [...data.mcps];
                           const env = Object.fromEntries(
-                            Object.entries(mcps[i].env).map(([ek, ev], idx) =>
+                            Object.entries(mcps[i].env || {}).map(([ek, ev], idx) =>
                               idx === ei ? [e.target.value, ev] : [ek, ev]
                             )
                           );
@@ -205,7 +274,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                         value={v}
                         onChange={(e) => {
                           const mcps = [...data.mcps];
-                          mcps[i] = { ...mcps[i], env: { ...mcps[i].env, [k]: e.target.value } };
+                          mcps[i] = { ...mcps[i], env: { ...(mcps[i].env || {}), [k]: e.target.value } };
                           update({ mcps });
                         }}
                       />
@@ -214,7 +283,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                         onClick={() => {
                           const mcps = [...data.mcps];
                           const env = Object.fromEntries(
-                            Object.entries(mcps[i].env).filter((_, idx) => idx !== ei)
+                            Object.entries(mcps[i].env || {}).filter((_, idx) => idx !== ei)
                           );
                           mcps[i] = { ...mcps[i], env };
                           update({ mcps });
@@ -226,7 +295,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                     className="text-xs text-primary hover:underline"
                     onClick={() => {
                       const mcps = [...data.mcps];
-                      mcps[i] = { ...mcps[i], env: { ...mcps[i].env, "": "" } };
+                      mcps[i] = { ...mcps[i], env: { ...(mcps[i].env || {}), "": "" } };
                       update({ mcps });
                     }}
                   >+ Add env var</button>
@@ -267,6 +336,10 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
           <ActionsTab data={data} update={update} />
         )}
 
+        {tab === "Triggers" && (
+          <TriggersTab data={data} update={update} />
+        )}
+
         {tab === "Expose" && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">Select which endpoints are accessible via API key</p>
@@ -293,11 +366,106 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="space-y-1">
+    <div className={cn("space-y-1", className)}>
       <label className="text-xs text-muted-foreground">{label}</label>
       {children}
+    </div>
+  );
+}
+
+function TriggersTab({
+  data,
+  update,
+}: {
+  data: AgentDesign;
+  update: (patch: Partial<AgentDesign>) => void;
+}) {
+  const triggers = data.triggers || [];
+
+  const addTrigger = (type: "webhook" | "cron" | "task") => {
+    let newTrigger: any = { type };
+    if (type === "cron") {
+      newTrigger = { ...newTrigger, schedule: "* * * * *", timezone: "UTC" };
+    }
+    update({ triggers: [...triggers, newTrigger] });
+  };
+
+  const updateTrigger = (i: number, patch: any) => {
+    const next = triggers.map((t, idx) => idx === i ? { ...t, ...patch } : t);
+    update({ triggers: next });
+  };
+
+  const removeTrigger = (i: number) =>
+    update({ triggers: triggers.filter((_, idx) => idx !== i) });
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        Triggers define how this agent is activated from outside the pipeline.
+      </p>
+
+      {triggers.map((trigger, i) => (
+        <div key={i} className="p-3 rounded border border-border space-y-2 relative">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase text-primary">{trigger.type}</span>
+            <button className="text-xs text-destructive hover:underline" onClick={() => removeTrigger(i)}>
+              Remove
+            </button>
+          </div>
+
+          {trigger.type === "webhook" && (
+            <div className="space-y-2">
+              <p className="text-[10px] text-muted-foreground">
+                Path: <code className="bg-muted px-1 rounded">/webhooks/{data.id}</code>
+              </p>
+              <Field label="Target Action (Optional)">
+                <select
+                  className="input text-xs"
+                  value={(trigger as any).actionName || ""}
+                  onChange={(e) => updateTrigger(i, { actionName: e.target.value || undefined })}
+                >
+                  <option value="">(Default / Auto-detect)</option>
+                  {data.actions.map(a => <option key={a.name} value={a.name}>{a.name}</option>)}
+                </select>
+              </Field>
+            </div>
+          )}
+
+          {trigger.type === "cron" && (
+            <div className="space-y-2">
+              <Field label="Schedule (Cron Expression)">
+                <input
+                  className="input text-xs font-mono"
+                  placeholder="0 0 * * *"
+                  value={(trigger as any).schedule}
+                  onChange={(e) => updateTrigger(i, { schedule: e.target.value })}
+                />
+              </Field>
+              <Field label="Target Action (Required)">
+                <select
+                  className="input text-xs"
+                  value={(trigger as any).actionName || ""}
+                  onChange={(e) => updateTrigger(i, { actionName: e.target.value || undefined })}
+                >
+                  <option value="">Select an action...</option>
+                  {data.actions.map(a => <option key={a.name} value={a.name}>{a.name}</option>)}
+                </select>
+              </Field>
+            </div>
+          )}
+
+          {trigger.type === "task" && (
+            <p className="text-xs italic text-muted-foreground">Internal task trigger. Always active.</p>
+          )}
+        </div>
+      ))}
+
+      <div className="flex gap-2">
+        <button className="btn btn-secondary flex-1 text-[10px] h-7" onClick={() => addTrigger("webhook")}>+ Webhook</button>
+        <button className="btn btn-secondary flex-1 text-[10px] h-7" onClick={() => addTrigger("cron")}>+ Cron</button>
+      </div>
     </div>
   );
 }
@@ -317,8 +485,8 @@ function MemoryTab({
 
   const toggleReadableBy = (agentId: string, checked: boolean) => {
     const readableBy = checked
-      ? [...data.memory.readableBy, agentId]
-      : data.memory.readableBy.filter((id) => id !== agentId);
+      ? [...(data.memory.readableBy || []), agentId]
+      : (data.memory.readableBy || []).filter((id) => id !== agentId);
     update({ memory: { ...data.memory, readableBy } });
   };
 
@@ -344,7 +512,7 @@ function MemoryTab({
               <label key={a.id} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={data.memory.readableBy.includes(a.id)}
+                  checked={(data.memory.readableBy || []).includes(a.id)}
                   onChange={(e) => toggleReadableBy(a.id, e.target.checked)}
                   className="accent-primary"
                 />

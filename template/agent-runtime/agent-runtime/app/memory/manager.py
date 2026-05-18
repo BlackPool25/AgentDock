@@ -19,10 +19,11 @@ class MemoryFileInfo:
 
 
 class MemoryManager:
-    def __init__(self, base_path: Path, auto_commit: bool = True) -> None:
+    def __init__(self, base_path: Path, auto_commit: bool = True, rag_manager: Optional[Any] = None) -> None:
         self.base_path = base_path
         self.auto_commit = auto_commit
         self.git = GitManager(base_path)
+        self.rag = rag_manager
 
     def setup(self) -> None:
         self.base_path.mkdir(parents=True, exist_ok=True)
@@ -41,15 +42,20 @@ class MemoryManager:
         path.write_text(content)
         if self.auto_commit:
             asyncio.create_task(self.git.commit(filename, commit_message))
+        if self.rag:
+            asyncio.create_task(self.rag.index_file(path))
 
     async def append(self, filename: str, content: str) -> None:
         path = self.base_path / filename
         path.parent.mkdir(parents=True, exist_ok=True)
         existing = path.read_text() if path.exists() else ""
         separator = "\n\n" if existing and not existing.endswith("\n\n") else ""
-        path.write_text(existing + separator + content)
+        new_content = existing + separator + content
+        path.write_text(new_content)
         if self.auto_commit:
             asyncio.create_task(self.git.commit(filename))
+        if self.rag:
+            asyncio.create_task(self.rag.index_file(path))
 
     async def list_files(self) -> list[MemoryFileInfo]:
         files: list[MemoryFileInfo] = []

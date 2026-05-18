@@ -48,6 +48,26 @@ async function sendTask(
   }
 }
 
+function mapData(source: any, mapping: Array<{ from: string; to: string }>): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const m of mapping) {
+    const value = getNested(source, m.from);
+    if (value !== undefined) setNested(result, m.to, value);
+  }
+  return result;
+}
+
+function getNested(obj: any, path: string): any {
+  return path.split(".").reduce((o, key) => (o && o[key] !== undefined ? o[key] : undefined), obj);
+}
+
+function setNested(obj: any, path: string, value: any): void {
+  const keys = path.split(".");
+  const lastKey = keys.pop()!;
+  const target = keys.reduce((o, key) => (o[key] = o[key] || {}), obj);
+  target[lastKey] = value;
+}
+
 export async function handleTaskCompletion(
   fromAgentId: string,
   taskId: string,
@@ -63,10 +83,14 @@ export async function handleTaskCompletion(
     const filter = (conn.trigger as any).action_filter as string | undefined;
     if (filter && filter !== actionName) continue;
 
+    const sourceContext = { output, actionName, taskId, agentId: fromAgentId };
+    const mappedContext = mapData(sourceContext, conn.data_mapping || []);
+
     const instruction = (conn.trigger as any).pass_output
       ? `Process this output from ${fromAgentId}:\n\n${output}`
       : `${fromAgentId} completed a task. Begin your work.`;
-    await sendTask(conn.to, instruction, { sourceTaskId: taskId, sourceAgentId: fromAgentId });
+    
+    await sendTask(conn.to, instruction, { ...mappedContext, sourceTaskId: taskId, sourceAgentId: fromAgentId });
   }
 }
 
@@ -83,11 +107,14 @@ export async function handleFileWritten(
     const pattern = (conn.trigger as any).file_pattern ?? "*";
     if (!matchesPattern(filename, pattern)) continue;
 
+    const sourceContext = { filename, content, agentId: fromAgentId };
+    const mappedContext = mapData(sourceContext, conn.data_mapping || []);
+
     logger.info({ from: fromAgentId, to: conn.to, filename }, "file_received.trigger");
     await sendTask(
       conn.to,
       `File received from ${fromAgentId}: ${filename}`,
-      { sourceAgentId: fromAgentId, filename },
+      { ...mappedContext, sourceAgentId: fromAgentId, filename },
       [{ filename, content: Buffer.from(content).toString("base64"), mimeType: "text/plain" }],
     );
   }

@@ -15,7 +15,7 @@ const OUTPUT_DIR = resolve(process.env.OUTPUT_DIR ?? "./data/generated");
 export async function generateProject(design: SystemDesign, generationId: string): Promise<string> {
   mkdirSync(OUTPUT_DIR, { recursive: true });
   const zipPath = join(OUTPUT_DIR, `${generationId}.zip`);
-  const projectName = design.systemName.toLowerCase().replace(/\s+/g, "-");
+  const projectName = design.systemName.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 
   return new Promise((resolve, reject) => {
     const output = createWriteStream(zipPath);

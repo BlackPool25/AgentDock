@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from .config.loader import load_config
 from .memory.manager import MemoryManager
+from .rag.manager import RAGManager
 from .shell.executor import ShellExecutor
 from .llm.client import LLMClient
 from .communication.task_receiver import TaskReceiver, TaskPayload
@@ -25,7 +26,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     config = load_config()
     log.info("config_loaded", agent_id=config.agent.id)
 
-    memory = MemoryManager(Path(config.memory.path), config.memory.git_auto_commit)
+    rag = RAGManager(config.rag)
+    if rag.enabled:
+        await rag.force_reindex()
+
+    memory = MemoryManager(Path(config.memory.path), config.memory.git_auto_commit, rag)
     memory.setup()
 
     shell = ShellExecutor(config.shell.enabled, config.shell.level, config.shell.allowed_commands)
@@ -39,8 +44,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
 
     # Pass config so TaskReceiver can dispatch named actions
-    task_receiver = TaskReceiver(memory, llm, config)
-    file_receiver = FileReceiver(memory)
+    task_receiver = TaskReceiver(memory, llm, config, rag)
+    file_receiver = FileReceiver(memory, rag)
 
     mcp = MCPClientManager(config.mcps)
     await mcp.start()
