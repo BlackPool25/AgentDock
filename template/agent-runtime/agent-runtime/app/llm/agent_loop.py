@@ -57,7 +57,20 @@ class AgentLoop:
         # 4. Build initial message history
         messages = self._build_initial_messages(task, system_prompt, rag_context)
 
-        # 5. THE LOOP
+        # 5. Check for insufficient input
+        if self.config.insufficient_input.enabled:
+            is_insufficient = await self._check_input_sufficiency(task, messages)
+            if is_insufficient:
+                cfg = self.config.insufficient_input
+                if cfg.fallback_action == "return_error":
+                    return cfg.message
+                elif cfg.fallback_action == "ask_clarification":
+                    messages.append({"role": "assistant", "content": cfg.message})
+                    messages.append({"role": "user", "content": "Please provide additional information or clarification."})
+                elif cfg.fallback_action == "use_defaults":
+                    messages.append({"role": "system", "content": "Input may be incomplete. Proceed with available information and reasonable defaults."})
+
+        # 6. THE LOOP
         for round_num in range(MAX_TOOL_ROUNDS):
             log.info("agent_loop.round", round=round_num, task_id=task.taskId)
 
@@ -119,6 +132,19 @@ class AgentLoop:
         import base64
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
 
+        # Inject seed file content
+        if self.config.seed_files:
+            seed_content = "\n\n--- SEED FILES (Base Knowledge) ---\n"
+            for sf in self.config.seed_files:
+                seed_content += f"\n### {sf.filename}\n"
+                if sf.extracted_text:
+                    seed_content += sf.extracted_text + "\n"
+                elif sf.type == "text" and sf.content:
+                    seed_content += sf.content + "\n"
+                elif sf.type == "pdf" and sf.content_base64:
+                    seed_content += f"[PDF file: {sf.filename} - binary content]\n"
+            messages.append({"role": "system", "content": seed_content})
+
         if rag_context:
             messages.append({
                 "role": "system",
@@ -147,6 +173,18 @@ class AgentLoop:
 
         messages.append({"role": "user", "content": task.instruction})
         return messages
+
+    async def _check_input_sufficiency(self, task: "TaskPayload", messages: list[dict[str, Any]]) -> bool:
+        """Use LLM to check if input is sufficient to proceed."""
+        check_messages = [
+            {"role": "system", "content": "You are evaluating whether the provided input contains enough information to proceed with the task. Respond with only 'SUFFICIENT' or 'INSUFFICIENT'."},
+        ] + messages
+        try:
+            response = await self.gateway.chat(messages=check_messages, tools=None)
+            return "INSUFFICIENT" in response.content.upper()
+        except Exception as e:
+            log.warning("input_check_failed", error=str(e))
+            return False
 
     def _build_shell_tool_definition(self) -> dict[str, Any]:
         return {

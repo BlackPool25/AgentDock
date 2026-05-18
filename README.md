@@ -328,7 +328,15 @@ GET  /api/systems/:id/generations/:genId   → re-download a previous generation
 
 All agent endpoints are proxied through the orchestrator (port 4000) and gated by the `expose[]` config.
 
+> **Full API reference:** [docs/generated-system-api.md](docs/generated-system-api.md)
+
 ```bash
+# Get a JWT token first (password = API_PASSWORD in .env, defaults to JWT_SECRET)
+POST http://localhost:4000/auth/login
+Content-Type: application/json
+{"password": "your-api-password"}
+# → { "token": "eyJ...", "expiresIn": "24h" }
+
 # System health
 GET  http://localhost:4000/health
 

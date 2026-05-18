@@ -63,11 +63,13 @@ export function generateCompose(design: SystemDesign): string {
 
   for (const agent of design.agents) {
     const peers = getPeerAgents(agent.id, design);
+    const hasSeedFiles = (agent as any).seedFiles?.length > 0;
     services[agent.id] = {
       build: { context: "./agent-runtime" },
       volumes: [
         `memory-${agent.id}:/memory`,
         `./configs/agents/${agent.id}.yaml:/app/config/agent.yaml:ro`,
+        ...(hasSeedFiles ? [`./configs/seed/${agent.id}:/app/seed:ro`] : []),
       ],
       environment: [
         `AGENT_ID=${agent.id}`,

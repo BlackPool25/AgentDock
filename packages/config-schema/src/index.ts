@@ -59,6 +59,19 @@ export const TriggerConfigSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+export const SeedFileSchema = z.object({
+  filename: z.string(),
+  type: z.enum(["text", "pdf"]),
+  content: z.string(),
+  extractedText: z.string().optional(),
+});
+
+export const InsufficientInputConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  message: z.string().default("I don't have enough information to proceed. Please provide more details."),
+  fallbackAction: z.enum(["return_error", "ask_clarification", "use_defaults"]).default("return_error"),
+});
+
 export const AgentDesignSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/, "ID must be lowercase alphanumeric with hyphens"),
   name: z.string().min(1),
@@ -82,10 +95,11 @@ export const AgentDesignSchema = z.object({
     pythonPackages: z.array(z.string()).default([]),
     systemPackages: z.array(z.string()).default([]),
   }),
-  // Named actions this agent can perform
   actions: z.array(AgentActionSchema).default([]),
   triggers: z.array(TriggerConfigSchema).default([{ type: "task" }]),
   expose: z.array(z.enum(["logs", "chat", "memory", "status", "tasks"])).default(["status", "logs"]),
+  seedFiles: z.array(SeedFileSchema).default([]),
+  insufficientInput: InsufficientInputConfigSchema.default({}),
 });
 
 // ─── Data mapping: maps output fields from source agent to input fields of target ─
@@ -176,6 +190,17 @@ export const AgentConfigSchema = z.object({
     prompt_template: z.string().optional(),
     output_file: z.string().optional(),
   })).default([]),
+  seed_files: z.array(z.object({
+    filename: z.string(),
+    type: z.enum(["text", "pdf"]),
+    content: z.string(),
+    extracted_text: z.string().optional(),
+  })).default([]),
+  insufficient_input: z.object({
+    enabled: z.boolean().default(false),
+    message: z.string().default("I don't have enough information to proceed. Please provide more details."),
+    fallback_action: z.enum(["return_error", "ask_clarification", "use_defaults"]).default("return_error"),
+  }).default({}),
   triggers: z.array(TriggerConfigSchema).default([{ type: "task" }]),
   expose: z.array(z.enum(["logs", "chat", "memory", "status", "tasks"])).default(["status", "logs"]),
   ports: z.object({ internal: z.number().int().default(8080) }).default({}),
@@ -225,3 +250,5 @@ export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 export type WorkflowConfig = z.infer<typeof WorkflowConfigSchema>;
 export type LLMProvider = z.infer<typeof LLMProviderSchema>;
 export type MCPConfig = z.infer<typeof MCPConfigSchema>;
+export type SeedFile = z.infer<typeof SeedFileSchema>;
+export type InsufficientInputConfig = z.infer<typeof InsufficientInputConfigSchema>;

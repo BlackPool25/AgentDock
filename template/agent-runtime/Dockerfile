@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /
 
 # Install Python dependencies
 COPY pyproject.toml ./
-RUN uv pip install --system -r pyproject.toml
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r pyproject.toml
 
 # Copy app source
 COPY app/ ./app/

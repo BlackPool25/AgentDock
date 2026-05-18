@@ -68,6 +68,8 @@ function defaultAgent(id: string): AgentNodeData {
     actions: [],
     triggers: [{ type: "task" }],
     expose: ["status", "logs"],
+    seedFiles: [],
+    insufficientInput: { enabled: false, message: "I don't have enough information to proceed. Please provide more details.", fallbackAction: "return_error" },
   };
 }
 

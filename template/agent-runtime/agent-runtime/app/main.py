@@ -21,6 +21,21 @@ configure_structlog()
 log = structlog.get_logger()
 
 
+def _seed_memory(base_path: Path) -> None:
+    """Copy seed files from /app/seed/ to /memory/ on first boot."""
+    seed_dir = Path("/app/seed")
+    if not seed_dir.exists():
+        return
+    for src in seed_dir.rglob("*"):
+        if src.is_file():
+            rel = src.relative_to(seed_dir)
+            dest = base_path / rel
+            if not dest.exists():
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(src.read_bytes())
+                log.info("seed_file_copied", source=str(src), dest=str(dest))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 1. Load config
@@ -36,14 +51,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     memory = MemoryManager(Path(config.memory.path), config.memory.git_auto_commit, rag)
     memory.setup()
 
-    # 4. Shell
+    # 4. Seed files (copy from /app/seed/ to /memory/ if present)
+    _seed_memory(memory.base_path)
+
+    # 5. Shell
     shell = ShellExecutor(
         config.shell.enabled,
         config.shell.level,
         config.shell.allowed_commands,
     )
 
-    # 5. LLM client
+    # 6. LLM client
     llm = LLMClient(
         provider=config.llm.provider,
         model=config.llm.model,
@@ -51,15 +69,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         max_tokens=config.llm.max_tokens,
     )
 
-    # 6. MCP
+    # 7. MCP
     mcp = MCPClientManager(config.mcps)
     await mcp.start()
 
-    # 7. Task + file receivers — pass config so task_receiver can dispatch actions
+    # 8. Task + file receivers — pass config so task_receiver can dispatch actions
     task_receiver = TaskReceiver(memory, llm, config, rag, mcp, shell)
     file_receiver = FileReceiver(memory, rag)
 
-    # 8. Scheduler
+    # 9. Scheduler
     scheduler = AgentScheduler()
     await scheduler.start(config.triggers, lambda msg: task_receiver.receive(
         TaskPayload(instruction=msg, senderId="scheduler")
@@ -70,6 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.memory = memory
     app.state.shell = shell
     app.state.llm = llm
+    app.state.rag = rag
     app.state.task_receiver = task_receiver
     app.state.file_receiver = file_receiver
     app.state.mcp = mcp

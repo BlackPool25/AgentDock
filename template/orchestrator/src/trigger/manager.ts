@@ -153,18 +153,32 @@ export async function handleFileWritten(
     if (!matchesPattern(filename, pattern)) continue;
 
     logger.info({ from: fromAgentId, to: conn.to, filename }, "file_received trigger fired");
+    const mimeType = inferMimeType(filename);
     await sendTask(
       conn.to,
-      `File received from ${fromAgentId}: ${filename}`,
+      `File received from ${fromAgentId}: ${filename}\n\nThe file content is attached to this task. Read the attached file carefully and use it as your primary input.`,
       { sourceAgentId: fromAgentId, filename },
-      [{ filename, content: Buffer.from(content).toString("base64"), mimeType: "text/plain" }]
+      [{ filename, content: Buffer.from(content).toString("base64"), mimeType }]
     );
   }
 }
 
 function matchesPattern(filename: string, pattern: string): boolean {
   if (pattern === "*") return true;
-  // Simple glob: only supports * wildcard
   const regex = new RegExp("^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
   return regex.test(filename);
+}
+
+function inferMimeType(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  const map: Record<string, string> = {
+    md: "text/markdown", txt: "text/plain", json: "application/json",
+    yaml: "text/yaml", yml: "text/yaml", xml: "text/xml", csv: "text/csv",
+    html: "text/html", htm: "text/html", log: "text/plain",
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+    webp: "image/webp", svg: "image/svg+xml", pdf: "application/pdf",
+    zip: "application/zip", tar: "application/x-tar", gz: "application/gzip",
+    py: "text/x-python", js: "text/javascript", ts: "text/typescript",
+  };
+  return map[ext] ?? "application/octet-stream";
 }

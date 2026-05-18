@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { jwt } from "hono/jwt";
 import { upgradeWebSocket, websocket } from "hono/bun";
 import { randomUUID } from "crypto";
+import { SignJWT } from "jose";
 import { logger } from "./logger.js";
 import { loadConfig } from "./config/loader.js";
 import { wsHub } from "./api/websocket/hub.js";
@@ -56,6 +57,22 @@ app.post("/internal/events", async (c) => {
   }
 
   return c.json({ ok: true });
+});
+
+// ── Auth — login to get a JWT ─────────────────────────────────────────────────
+app.post("/auth/login", async (c) => {
+  const body = await c.req.json().catch(() => ({})) as { password?: string };
+  const API_PASSWORD = process.env.API_PASSWORD ?? JWT_SECRET;
+  if (!body.password || body.password !== API_PASSWORD) {
+    return c.json({ error: "Invalid password" }, 401);
+  }
+  const secret = new TextEncoder().encode(JWT_SECRET);
+  const token = await new SignJWT({ sub: "admin", systemId: SYSTEM_ID })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("24h")
+    .sign(secret);
+  return c.json({ token, expiresIn: "24h" });
 });
 
 // ── Webhooks (public — authenticated by agent ID) ─────────────────────────────

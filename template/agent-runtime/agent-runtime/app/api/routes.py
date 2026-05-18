@@ -1,8 +1,11 @@
 from __future__ import annotations
 import os
 import time
+import base64
+import mimetypes
 from typing import Any, Optional
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File as FastAPIFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import structlog
 
@@ -122,6 +125,59 @@ async def write_memory_file(filename: str, body: MemoryWriteBody, request: Reque
     return {"ok": True}
 
 
+@router.post("/memory/upload")
+async def upload_memory_file(
+    file: UploadFile = FastAPIFile(...),
+    request: Request = None,  # type: ignore
+):
+    """Upload a file (text, image, binary) directly to agent memory."""
+    s = get_state(request)  # type: ignore
+    content = await file.read()
+    filename = file.filename or "uploaded_file"
+
+    # Determine MIME type
+    mime_type = file.content_type
+    if not mime_type:
+        mime_type, _ = mimetypes.guess_type(filename)
+        mime_type = mime_type or "application/octet-stream"
+
+    # For text files, write as string; for binary, write as base64-encoded
+    if mime_type.startswith("text/") or mime_type in ("application/json", "application/xml", "application/yaml"):
+        text_content = content.decode("utf-8", errors="replace")
+        await s.memory.write(filename, text_content)
+    else:
+        # Binary files: store as base64 in a .b64 wrapper file, plus raw copy
+        raw_path = s.memory.base_path / filename
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_path.write_bytes(content)
+        # Also create a metadata entry
+        meta = {"filename": filename, "size": len(content), "mime_type": mime_type}
+        import json
+        meta_path = s.memory.base_path / f"{filename}.meta.json"
+        meta_path.write_text(json.dumps(meta))
+
+    _capture_log("info", f"File uploaded: {filename}", filename=filename, size=len(content), mime_type=mime_type)
+    return {"ok": True, "filename": filename, "size": len(content), "mime_type": mime_type}
+
+
+@router.get("/memory/{filename:path}/raw")
+async def get_memory_file_raw(filename: str, request: Request):
+    """Download a memory file as raw binary (for images, PDFs, etc)."""
+    s = get_state(request)
+    file_path = s.memory.base_path / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    mime_type, _ = mimetypes.guess_type(filename)
+    media_type = mime_type or "application/octet-stream"
+
+    return StreamingResponse(
+        open(file_path, "rb"),
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 # ─── Tasks ────────────────────────────────────────────────────────────────────
 @router.post("/tasks", status_code=202)
 async def receive_task(request: Request) -> dict[str, Any]:
@@ -177,7 +233,7 @@ class ChatBody(BaseModel):
 async def chat(body: ChatBody, request: Request) -> dict[str, Any]:
     from ..communication.task_receiver import TaskPayload
     s = get_state(request)
-    _capture_log("info", f"Chat message received", message=body.message[:100])
+    _capture_log("info", "Chat message received", msg=body.message[:100])
     payload = TaskPayload(instruction=body.message, senderId="chat")
     task_id = await s.task_receiver.receive(payload)
     return {"taskId": task_id, "status": "processing"}
@@ -205,3 +261,26 @@ async def get_config(request: Request) -> dict[str, Any]:
     s = get_state(request)
     cfg = s.config.model_dump()
     return cfg
+
+
+# ─── RAG ──────────────────────────────────────────────────────────────────────
+@router.get("/rag/status")
+async def rag_status(request: Request) -> dict[str, Any]:
+    s = get_state(request)
+    if not s.rag.enabled:
+        return {"enabled": False, "chunk_count": 0, "folders": []}
+    return {
+        "enabled": True,
+        "chunk_count": s.rag.collection.count(),
+        "folders": [f.path for f in s.rag.config.folders],
+        "embedding_model": s.rag.config.embedding_model,
+    }
+
+
+@router.post("/rag/reindex")
+async def rag_reindex(request: Request) -> dict[str, Any]:
+    s = get_state(request)
+    if not s.rag.enabled:
+        return {"enabled": False, "chunks_indexed": 0}
+    count = await s.rag.force_reindex()
+    return {"chunks_indexed": count}

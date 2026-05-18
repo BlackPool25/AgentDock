@@ -38,8 +38,18 @@ ${connRows}
 ## API
 
 \`\`\`bash
-# Health check
+# 1. Get a JWT token (password = API_PASSWORD from .env, defaults to JWT_SECRET)
+curl -X POST http://localhost:4000/auth/login \\
+  -H "Content-Type: application/json" \\
+  -d '{"password": "your-api-password"}'
+# → { "token": "eyJ...", "expiresIn": "24h" }
+
+# Health check (public)
 GET http://localhost:4000/health
+
+# System status
+GET http://localhost:4000/api/system/status
+Authorization: Bearer {jwt}
 
 # Agent status (requires expose: status)
 GET http://localhost:4000/api/agents/{agent-id}/status
@@ -55,6 +65,11 @@ Authorization: Bearer {jwt}
 Content-Type: application/json
 {"message": "Hello"}
 
+# Webhook trigger (public — no JWT)
+POST http://localhost:4000/webhooks/{agent-id}
+Content-Type: application/json
+{"instruction": "Do something"}
+
 # Hot-reload agent config
 POST http://localhost:4000/api/agents/{agent-id}/reload
 Authorization: Bearer {jwt}
@@ -62,6 +77,8 @@ Authorization: Bearer {jwt}
 # WebSocket events
 WS ws://localhost:4000/ws?token={jwt}
 \`\`\`
+
+Full API reference: [docs/generated-system-api.md](https://github.com/your-org/agentdock/blob/main/docs/generated-system-api.md)
 
 ## Hot-Editing
 

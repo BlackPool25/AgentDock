@@ -75,6 +75,20 @@ class TriggerConfig(BaseModel):
     actionName: Optional[str] = None
 
 
+class SeedFileConfig(BaseModel):
+    filename: str
+    type: Literal["text", "pdf"]
+    content: Optional[str] = None
+    content_base64: Optional[str] = None
+    extracted_text: Optional[str] = None
+
+
+class InsufficientInputConfig(BaseModel):
+    enabled: bool = False
+    message: str = "I don't have enough information to proceed. Please provide more details."
+    fallback_action: Literal["return_error", "ask_clarification", "use_defaults"] = "return_error"
+
+
 class AgentMeta(BaseModel):
     id: str
     name: str
@@ -96,6 +110,8 @@ class AgentConfig(BaseModel):
     mcps: list[MCPServerConfig] = Field(default_factory=list)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     actions: list[ActionConfig] = Field(default_factory=list)
+    seed_files: list[SeedFileConfig] = Field(default_factory=list)
+    insufficient_input: InsufficientInputConfig = Field(default_factory=InsufficientInputConfig)
     triggers: list[TriggerConfig] = Field(default_factory=lambda: [TriggerConfig(type="task")])
     expose: list[str] = Field(default_factory=lambda: ["status", "logs"])
     ports: dict[str, int] = Field(default_factory=lambda: {"internal": 8080})

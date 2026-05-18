@@ -8,6 +8,8 @@ export function generateEnvExample(design: SystemDesign): string {
     "# ── Required ──────────────────────────────────────────────────────────────",
     "SYSTEM_ID=" + design.systemId,
     "JWT_SECRET=change-me-to-a-random-32-char-string",
+    "# API_PASSWORD: password for POST /auth/login. Defaults to JWT_SECRET if not set.",
+    "API_PASSWORD=",
     "ORCHESTRATOR_PORT=4000",
     "",
     "# ── LLM Providers (fill in what you use) ──────────────────────────────────",

@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils.js";
 import type { AgentDesign, AgentAction } from "@agentdock/config-schema";
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 
-const TABS = ["General", "LLM", "Memory", "RAG", "Triggers", "Shell", "MCPs", "Tools", "Actions", "Expose"] as const;
+const TABS = ["General", "LLM", "Memory", "RAG", "Triggers", "Shell", "MCPs", "Tools", "Actions", "Seed", "Input", "Expose"] as const;
 type Tab = (typeof TABS)[number];
 
 const PROVIDERS = ["ollama", "openai", "anthropic", "gemini", "groq"] as const;
@@ -424,6 +424,14 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
           <ActionsTab data={data} update={update} />
         )}
 
+        {tab === "Seed" && (
+          <SeedFilesTab data={data} update={update} />
+        )}
+
+        {tab === "Input" && (
+          <InsufficientInputTab data={data} update={update} />
+        )}
+
         {tab === "Triggers" && (
           <TriggersTab data={data} update={update} />
         )}
@@ -724,6 +732,174 @@ function ActionsTab({
       <button className="text-xs text-primary hover:underline" onClick={addAction}>
         + Add Action
       </button>
+    </div>
+  );
+}
+
+function SeedFilesTab({
+  data,
+  update,
+}: {
+  data: AgentDesign;
+  update: (patch: Partial<AgentDesign>) => void;
+}) {
+  const seedFiles = (data as any).seedFiles || [];
+
+  const addSeedFile = (file: { filename: string; type: "text" | "pdf"; content: string; extractedText?: string }) => {
+    update({ seedFiles: [...seedFiles, file] } as any);
+  };
+
+  const removeSeedFile = (i: number) => {
+    update({ seedFiles: seedFiles.filter((_f: any, idx: number) => idx !== i) } as any);
+  };
+
+  const updateSeedFile = (i: number, patch: Partial<{ filename: string; type: "text" | "pdf"; content: string; extractedText?: string }>) => {
+    const next = seedFiles.map((f: any, idx: number) => idx === i ? { ...f, ...patch } : f);
+    update({ seedFiles: next } as any);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.name.endsWith(".pdf")) {
+      const arrayBuffer = await file.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      addSeedFile({ filename: file.name, type: "pdf", content: base64 });
+    } else {
+      const text = await file.text();
+      addSeedFile({ filename: file.name, type: "text", content: text });
+    }
+    e.target.value = "";
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20">
+        <div className="flex items-start gap-1.5">
+          <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-[10px] text-muted-foreground">
+            Seed files provide base knowledge to the agent. PDFs are extracted at build time. Files are copied to <code className="bg-muted px-1 rounded">/memory/</code> on agent startup.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <label className="btn btn-secondary flex-1 text-[10px] h-7 cursor-pointer text-center">
+          + Upload File (PDF/TXT/MD)
+          <input type="file" className="hidden" accept=".pdf,.txt,.md,.json,.yaml,.yml,.csv" onChange={handleFileUpload} />
+        </label>
+      </div>
+
+      {seedFiles.length === 0 && (
+        <p className="text-xs text-muted-foreground italic text-center py-4">No seed files added</p>
+      )}
+
+      {seedFiles.map((sf: any, i: number) => (
+        <div key={i} className="p-3 rounded border border-border space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono">{sf.filename}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary uppercase">{sf.type}</span>
+            </div>
+            <button className="text-xs text-destructive hover:underline" onClick={() => removeSeedFile(i)}>
+              Remove
+            </button>
+          </div>
+
+          <Field label="Filename">
+            <input
+              className="input text-xs font-mono"
+              value={sf.filename}
+              onChange={(e) => updateSeedFile(i, { filename: e.target.value })}
+            />
+          </Field>
+
+          {sf.type === "text" && (
+            <Field label="Content">
+              <textarea
+                className="input resize-none font-mono text-xs"
+                rows={4}
+                value={sf.content}
+                onChange={(e) => updateSeedFile(i, { content: e.target.value })}
+              />
+            </Field>
+          )}
+
+          {sf.type === "pdf" && (
+            <div className="p-2 rounded bg-muted/50">
+              <p className="text-[10px] text-muted-foreground">
+                PDF content stored as base64. Text will be extracted at build time.
+              </p>
+              {sf.extractedText && (
+                <details className="mt-1">
+                  <summary className="text-[10px] text-primary cursor-pointer">View extracted text</summary>
+                  <pre className="text-[10px] font-mono mt-1 max-h-32 overflow-auto whitespace-pre-wrap">{sf.extractedText}</pre>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function InsufficientInputTab({
+  data,
+  update,
+}: {
+  data: AgentDesign;
+  update: (patch: Partial<AgentDesign>) => void;
+}) {
+  const config = (data as any).insufficientInput || { enabled: false, message: "", fallbackAction: "return_error" };
+
+  return (
+    <div className="space-y-3">
+      <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20">
+        <div className="flex items-start gap-1.5">
+          <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-[10px] text-muted-foreground">
+            Configure how the agent responds when the input is not sufficient or valid to proceed with its task.
+          </p>
+        </div>
+      </div>
+
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={config.enabled}
+          onChange={(e) => update({ insufficientInput: { ...config, enabled: e.target.checked } } as any)}
+          className="accent-primary"
+        />
+        <span className="text-sm font-medium">Enable insufficient input handling</span>
+      </label>
+
+      {config.enabled && (
+        <div className="space-y-3 pl-6 border-l-2 border-primary/20">
+          <Field label="Response Message">
+            <textarea
+              className="input resize-none text-xs"
+              rows={3}
+              value={config.message}
+              onChange={(e) => update({ insufficientInput: { ...config, message: e.target.value } } as any)}
+              placeholder="I don't have enough information to proceed..."
+            />
+          </Field>
+
+          <Field label="Fallback Action">
+            <select
+              className="input text-xs"
+              value={config.fallbackAction}
+              onChange={(e) => update({ insufficientInput: { ...config, fallbackAction: e.target.value } } as any)}
+            >
+              <option value="return_error">Return error message to user</option>
+              <option value="ask_clarification">Ask for clarification</option>
+              <option value="use_defaults">Use default values and proceed</option>
+            </select>
+          </Field>
+        </div>
+      )}
     </div>
   );
 }
