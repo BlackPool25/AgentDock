@@ -38,7 +38,6 @@ class _RingBufferProcessor:
         _capture_log(level, message, **extra)
         return event_dict
 
-
 def configure_structlog() -> None:
     """Configure structlog to capture into ring buffer + render to stdout."""
     structlog.configure(
@@ -53,6 +52,7 @@ def configure_structlog() -> None:
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,
     )
+
 
 
 def get_state(request: Request) -> Any:
