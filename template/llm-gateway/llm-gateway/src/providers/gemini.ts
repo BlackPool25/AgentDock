@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { LLMProvider, Message, LLMOptions, LLMResult } from "./base.js";
+import type { LLMProvider, Message, LLMOptions, LLMResult, SyncChatResult } from "./base.js";
 
 export class GeminiProvider implements LLMProvider {
   name = "gemini";
@@ -27,5 +27,11 @@ export class GeminiProvider implements LLMProvider {
     });
     const res = await chat.sendMessage(lastMsg?.content ?? "");
     return { output: res.response.text() };
+  }
+
+  async chatWithTools(messages: Message[], options: LLMOptions): Promise<SyncChatResult> {
+    // Gemini tool calling is inconsistent — fall back to plain chat
+    const result = await this.chat(messages, options);
+    return { content: result.output, toolCalls: [], usage: result.usage };
   }
 }

@@ -12,7 +12,8 @@ import { systemRoutes } from "./api/routes/systems.js";
 import { workflowRoutes } from "./api/routes/workflows.js";
 import { agentRoutes } from "./api/routes/agents.js";
 import { webhookRoutes } from "./api/routes/webhooks.js";
-import type { AgentEvent } from "@agentdock/shared-types";
+import { loadAllWorkflows } from "./workflow/parser.js";
+import { handleTaskCompletion, handleFileWritten } from "./trigger/manager.js";
 
 const app = new Hono();
 
@@ -23,10 +24,37 @@ app.get("/health", (c) => c.json({ status: "ok", systemId: env.SYSTEM_ID }));
 app.route("/api/auth", authRoutes);
 app.route("/webhooks", webhookRoutes);
 
-// ─── Internal events from agents ──────────────────────────────────────────────
+// ─── Internal events from agents ─────────────────────────────────────────────
 app.post("/internal/events", async (c) => {
-  const event = await c.req.json() as AgentEvent;
-  wsHub.broadcast(event);
+  const event = await c.req.json() as {
+    type: string;
+    agentId: string;
+    taskId?: string;
+    output?: string;
+    filename?: string;
+    content?: string;
+    actionName?: string;
+    [key: string]: unknown;
+  };
+
+  // Fan out to WebSocket clients
+  wsHub.broadcast(event as any);
+
+  // Load all workflows to find matching triggers
+  const workflows = loadAllWorkflows();
+
+  if (event.type === "agent:task:completed" && event.taskId && event.output !== undefined) {
+    for (const wf of workflows) {
+      await handleTaskCompletion(event.agentId, event.taskId, event.output as string, wf, event.actionName);
+    }
+  }
+
+  if (event.type === "agent:memory:written" && event.filename && event.content !== undefined) {
+    for (const wf of workflows) {
+      await handleFileWritten(event.agentId, event.filename as string, event.content as string, wf);
+    }
+  }
+
   return c.json({ ok: true });
 });
 
@@ -48,19 +76,18 @@ app.get(
       onOpen(_event, ws) {
         wsHub.add(clientId, ws as unknown as { send: (d: string) => void; readyState: number });
       },
-      onClose() {
-        wsHub.remove(clientId);
-      },
-      onError(event) {
-        logger.error({ clientId, event }, "WS error");
-        wsHub.remove(clientId);
-      },
+      onClose() { wsHub.remove(clientId); },
+      onError() { wsHub.remove(clientId); },
     };
-  })
+  }),
 );
 
-// ─── Error handler ────────────────────────────────────────────────────────────
+// ─── Error handler — Bug 5 fix: JWT 401 must not return 500 ──────────────────
 app.onError((err, c) => {
+  const status = (err as { status?: number }).status;
+  if (status === 401) {
+    return c.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, 401);
+  }
   logger.error({ err: err.message }, "Unhandled error");
   return c.json({ error: err.message, code: "INTERNAL_ERROR" }, 500);
 });
@@ -69,8 +96,4 @@ app.onError((err, c) => {
 await verifyDockerConnection();
 logger.info({ port: env.ORCHESTRATOR_PORT }, "Orchestrator starting");
 
-export default {
-  port: env.ORCHESTRATOR_PORT,
-  fetch: app.fetch,
-  websocket,
-};
+export default { port: env.ORCHESTRATOR_PORT, fetch: app.fetch, websocket };

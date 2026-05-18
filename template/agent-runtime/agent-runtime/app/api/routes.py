@@ -23,10 +23,37 @@ def _capture_log(level: str, message: str, **kwargs: Any) -> None:
         "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
         "level": level,
         "message": message,
-        **kwargs,
+        **{k: str(v) for k, v in kwargs.items()},
     })
     if len(_log_buffer) > _MAX_LOGS:
         _log_buffer.pop(0)
+
+
+class _RingBufferProcessor:
+    """structlog processor that captures all log events into the ring buffer."""
+    def __call__(self, logger: Any, method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+        level = method if method in ("debug", "info", "warning", "error", "critical") else "info"
+        message = str(event_dict.get("event", ""))
+        extra = {k: v for k, v in event_dict.items() if k not in ("event", "_record")}
+        _capture_log(level, message, **extra)
+        return event_dict
+
+
+def configure_structlog() -> None:
+    """Configure structlog to capture into ring buffer + render to stdout."""
+    structlog.configure(
+        processors=[
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.add_logger_name,
+            structlog.processors.TimeStamper(fmt="iso"),
+            _RingBufferProcessor(),
+            structlog.dev.ConsoleRenderer(),
+        ],
+        wrapper_class=structlog.make_filtering_bound_logger(0),
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
 
 
 def get_state(request: Request) -> Any:

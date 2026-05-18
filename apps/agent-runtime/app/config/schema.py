@@ -43,6 +43,13 @@ class TriggerConfig(BaseModel):
     timezone: str = "UTC"
 
 
+class ActionConfig(BaseModel):
+    name: str
+    description: Optional[str] = None
+    prompt_template: Optional[str] = None
+    output_file: Optional[str] = None  # written to /memory, fires file_received trigger
+
+
 class AgentMeta(BaseModel):
     id: str
     name: str
@@ -62,6 +69,7 @@ class AgentConfig(BaseModel):
     shell: ShellConfig = Field(default_factory=ShellConfig)
     mcps: list[MCPServerConfig] = Field(default_factory=list)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    actions: list[ActionConfig] = Field(default_factory=list)
     triggers: list[TriggerConfig] = Field(default_factory=lambda: [TriggerConfig(type="task")])
     expose: list[str] = Field(default_factory=lambda: ["status", "logs"])
     ports: dict[str, int] = Field(default_factory=lambda: {"internal": 8080})

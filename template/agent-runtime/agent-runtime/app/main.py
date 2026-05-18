@@ -13,14 +13,10 @@ from .communication.task_receiver import TaskReceiver, TaskPayload
 from .communication.file_receiver import FileReceiver
 from .mcp.client import MCPClientManager
 from .triggers.scheduler import AgentScheduler
-from .api.routes import router
+from .api.routes import router, configure_structlog
 
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer(),
-    ]
-)
+# Configure structlog with ring buffer capture BEFORE any logging happens
+configure_structlog()
 log = structlog.get_logger()
 
 

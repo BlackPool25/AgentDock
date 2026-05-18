@@ -181,7 +181,7 @@ export const WorkflowConfigSchema = z.object({
     description: z.string().optional(),
     data_mapping: z.array(z.object({ from: z.string(), to: z.string() })).default([]),
     trigger: z.discriminatedUnion("type", [
-      z.object({ type: z.literal("task_completion"), pass_output: z.boolean().default(true) }),
+      z.object({ type: z.literal("task_completion"), pass_output: z.boolean().default(true), action_filter: z.string().optional() }),
       z.object({ type: z.literal("cron"), schedule: z.string(), timezone: z.string().default("UTC") }),
       z.object({ type: z.literal("webhook") }),
       z.object({

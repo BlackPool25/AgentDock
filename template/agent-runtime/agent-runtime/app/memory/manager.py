@@ -55,9 +55,32 @@ class MemoryManager:
         files: list[MemoryFileInfo] = []
         for p in sorted(self.base_path.glob("**/*.md")):
             stat = p.stat()
+            commit_hash = await self._get_file_commit_hash(p)
             files.append(MemoryFileInfo(
                 filename=str(p.relative_to(self.base_path)),
                 size=stat.st_size,
                 last_modified=datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                last_commit_hash=commit_hash,
             ))
         return files
+
+    async def _get_file_commit_hash(self, file_path: Path) -> Optional[str]:
+        """Get the last git commit hash for a specific file. Returns None if not committed."""
+        try:
+            import asyncio
+            import subprocess
+            rel_path = str(file_path.relative_to(self.base_path))
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    ["git", "log", "--format=%H", "-1", "--", rel_path],
+                    cwd=self.base_path,
+                    capture_output=True,
+                    text=True,
+                )
+            )
+            commit = result.stdout.strip()
+            return commit if commit else None
+        except Exception:
+            return None

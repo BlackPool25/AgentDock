@@ -287,8 +287,8 @@ agent:
 
 llm:
   provider: "ollama"       # ollama | openai | anthropic | gemini | groq
-  model: "llama3.1:8b"
-  temperature: 0.7
+  model: "qwen2.5:7b"      # For tool-calling agents, use qwen2.5 or llama3.1
+  temperature: 0.2         # Keep 0.1–0.3 for tool-calling agents
   max_tokens: 4096
   system_prompt: |
     You are a helpful assistant.
@@ -408,6 +408,18 @@ Configure in the generated system's `.env`:
 | Google | `GEMINI_API_KEY` | Gemini 1.5 Pro/Flash |
 | Groq | `GROQ_API_KEY` | Llama 3, Mixtral (fast inference) |
 
+### Recommended Ollama Models for Tool-Calling Agents
+
+| Model | Size | Tool Calling | Verdict |
+|---|---|---|---|
+| `qwen2.5:7b` | 4.7GB | ✅ Excellent | **Best choice for most agents** |
+| `qwen2.5:14b` | 9GB | ✅ Excellent | Best overall if you have VRAM |
+| `llama3.1:8b` | 4.7GB | ✅ Good | Solid general purpose |
+| `qwen2.5-coder:7b` | 4.7GB | ✅ Good | Best for code/shell agents |
+| `gemma2:9b` | 5.4GB | ❌ Poor | Do not use for tool-calling agents |
+
+Use `temperature: 0.1–0.3` for any agent that calls tools. Higher temperatures cause malformed tool call JSON.
+
 ---
 
 ## Technology Stack
@@ -431,9 +443,9 @@ Configure in the generated system's `.env`:
 - [x] Phase 4 — Template runtime (orchestrator, llm-gateway, agent-runtime, Dockerfiles)
 - [x] Phase 5 — Docker compose (builder production + dev)
 - [x] Phase 6 — Agent runtime implementation (FastAPI routes, memory, git, shell, MCP, LLM client, action dispatch)
-- [x] Phase 7 — LLM Gateway implementation (BullMQ workers, all provider adapters)
+- [x] Phase 7 — LLM Gateway implementation (BullMQ workers, all provider adapters, sync chat endpoint)
 - [x] Phase 8 — End-to-end integration (3-agent pipeline verified: webhook → coordinator → analyst → report-writer → coordinator)
-- [ ] Phase 9 — Polish (structured logging to WebSocket, full docs, error handling consistency)
+- [x] Phase 9 — v3 features (agentic tool loop, task delivery retry, structured logging, git commit hashes)
 
 ### Known Working
 
@@ -446,6 +458,58 @@ Configure in the generated system's `.env`:
 - Generated runtime: Task tracking, logs, `currentTask`/`lastActivity` in status
 - Generated runtime: Action dispatch — agents pick correct action from config, write `output_file`, fire `file_received` triggers
 - Generated runtime: Git memory commits work correctly in Docker named volumes
+- Generated runtime: `lastCommitHash` populated per file via `git log --format=%H -1 -- <file>`
+- Generated runtime: `lastActivity` set on task receipt (not just completion)
+- Generated runtime: Structured logs captured into ring buffer — `/logs` endpoint returns real entries
+- Generated runtime: JWT 401 returns proper 401 response (not 500)
+- Generated runtime: Task delivery retries with exponential backoff (1s → 2s → 4s → 8s → 16s)
+- Generated runtime: Agentic tool loop — multi-turn LLM + MCP/shell tool execution per task
+- LLM Gateway: `POST /api/chat/sync` for synchronous agentic loop calls (bypasses BullMQ)
+- LLM Gateway: Tool calling support in OpenAI, Anthropic, Ollama providers
+
+### E2E Bug Fixes (v2 → v3)
+
+| Bug | Severity | Fix |
+|---|---|---|
+| Double analyst dispatch (no `action_filter`) | CRITICAL | Added `action_filter: dispatch_research` to coordinator→analyst connection |
+| Duplicate `file_received` events | CRITICAL | `output_{id}.md` written directly without firing `agent:memory:written` |
+| `lastCommitHash` always null | MEDIUM | `git log --format=%H -1 -- <file>` per file in `list_files()` |
+| Empty logs ring buffer | MEDIUM | structlog processor captures all events into `_log_buffer` |
+| JWT 401 returns 500 | LOW | `onError` checks `err.status === 401` before generic 500 handler |
+| Analyst `tasks` not in `expose[]` | LOW | Added `tasks` to analyst expose list in generated configs |
+| `lastActivity` null on task receipt | LOW | `_last_activity` set in `receive()` not just `complete()`/`fail()` |
+
+### Known Working
+
+- Builder API: JWT auth on all protected routes including `/api/auth/me`
+- Builder API: System CRUD, versioned generations, zip download
+- Generated runtime: Full 3-agent pipeline with `task_completion`, `file_received` triggers
+- Generated runtime: `action_filter` on `task_completion` prevents pipeline loops
+- Generated runtime: Agent proxy strips `Authorization` header (prevents JWT rejection at agents)
+- Generated runtime: Agent `expose[]` gating — unexposed endpoints return 403
+- Generated runtime: Task tracking, logs, `currentTask`/`lastActivity` in status
+- Generated runtime: Action dispatch — agents pick correct action from config, write `output_file`, fire `file_received` triggers
+- Generated runtime: Git memory commits work correctly in Docker named volumes
+- Generated runtime: `lastCommitHash` populated per file via `git log --format=%H -1 -- <file>`
+- Generated runtime: `lastActivity` set on task receipt (not just completion)
+- Generated runtime: Structured logs captured into ring buffer — `/logs` endpoint returns real entries
+- Generated runtime: JWT 401 returns proper 401 response (not 500)
+- Generated runtime: Task delivery retries with exponential backoff (1s → 2s → 4s → 8s → 16s)
+- Generated runtime: Agentic tool loop — multi-turn LLM + MCP/shell tool execution per task
+- LLM Gateway: `POST /api/chat/sync` for synchronous agentic loop calls (bypasses BullMQ)
+- LLM Gateway: Tool calling support in OpenAI, Anthropic, Ollama providers
+
+### E2E Bug Fixes (v2 → v3)
+
+| Bug | Severity | Fix |
+|---|---|---|
+| Double analyst dispatch (no `action_filter`) | CRITICAL | Added `action_filter: dispatch_research` to coordinator→analyst connection |
+| Duplicate `file_received` events | CRITICAL | `output_{id}.md` written directly without firing `agent:memory:written` |
+| `lastCommitHash` always null | MEDIUM | `git log --format=%H -1 -- <file>` per file in `list_files()` |
+| Empty logs ring buffer | MEDIUM | structlog processor captures all events into `_log_buffer` |
+| JWT 401 returns 500 | LOW | `onError` checks `err.status === 401` before generic 500 handler |
+| Analyst `tasks` not in `expose[]` | LOW | Added `tasks` to analyst expose list in generated configs |
+| `lastActivity` null on task receipt | LOW | `_last_activity` set in `receive()` not just `complete()`/`fail()` |
 
 ---
 

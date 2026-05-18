@@ -124,7 +124,7 @@ class TaskReceiver:
         )
         self._tasks.append(record)
         self._current_task = task_id
-        self._last_activity = ts
+        self._last_activity = ts  # set on receipt, not just on completion
 
         await self.memory.append(
             "task_queue.md",
@@ -201,7 +201,11 @@ class TaskReceiver:
         action = self._pending_action.pop(task_id, None)
         self._pending.pop(task_id, None)
 
-        await self.memory.write(f"output_{task_id}.md", output)
+        # Write internal output file directly — do NOT fire agent:memory:written for this
+        # (it's an internal record, not a trigger-worthy file)
+        output_path = self.memory.base_path / f"output_{task_id}.md"
+        output_path.write_text(output)
+
         await self.memory.write("state.md", f"current_task: {task_id}\nstatus: completed\n")
 
         # If action has output_file, write it and fire file_received trigger

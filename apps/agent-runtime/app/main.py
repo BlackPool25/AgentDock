@@ -9,63 +9,47 @@ from .config.loader import load_config
 from .memory.manager import MemoryManager
 from .shell.executor import ShellExecutor
 from .llm.client import LLMClient
-from .communication.task_receiver import TaskReceiver
+from .communication.task_receiver import TaskReceiver, TaskPayload
 from .communication.file_receiver import FileReceiver
 from .mcp.client import MCPClientManager
 from .triggers.scheduler import AgentScheduler
-from .api.routes import router
+from .api.routes import router, configure_structlog
 
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer(),
-    ]
-)
+# Configure structlog with ring buffer capture before any logging
+configure_structlog()
 log = structlog.get_logger()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # 1. Load config
     config = load_config()
     log.info("config_loaded", agent_id=config.agent.id)
 
-    # 2. Memory
     memory = MemoryManager(Path(config.memory.path), config.memory.git_auto_commit)
     memory.setup()
 
-    # 3. Shell
-    shell = ShellExecutor(
-        config.shell.enabled,
-        config.shell.level,
-        config.shell.allowed_commands,
-    )
+    shell = ShellExecutor(config.shell.enabled, config.shell.level, config.shell.allowed_commands)
 
-    # 4. LLM client
     llm = LLMClient(
         provider=config.llm.provider,
         model=config.llm.model,
         temperature=config.llm.temperature,
         max_tokens=config.llm.max_tokens,
+        system_prompt=config.llm.system_prompt or "",
     )
 
-    # 5. Task + file receivers
-    task_receiver = TaskReceiver(memory, llm)
+    # Pass config so TaskReceiver can dispatch named actions
+    task_receiver = TaskReceiver(memory, llm, config)
     file_receiver = FileReceiver(memory)
 
-    # 6. MCP
     mcp = MCPClientManager(config.mcps)
     await mcp.start()
 
-    # 7. Scheduler
     scheduler = AgentScheduler()
     await scheduler.start(config.triggers, lambda msg: task_receiver.receive(
-        __import__("app.communication.task_receiver", fromlist=["TaskPayload"]).TaskPayload(
-            instruction=msg, senderId="scheduler"
-        )
+        TaskPayload(instruction=msg, senderId="scheduler")
     ))
 
-    # Attach to app state
     app.state.config = config
     app.state.memory = memory
     app.state.shell = shell

@@ -89,6 +89,11 @@ app.get(
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.onError((err, c) => {
+  // hono/jwt throws HTTPException with status 401 on invalid/missing token
+  const status = (err as { status?: number }).status;
+  if (status === 401) {
+    return c.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, 401);
+  }
   logger.error({ err: err.message }, "Unhandled error");
   return c.json({ error: err.message, code: "INTERNAL_ERROR" }, 500);
 });

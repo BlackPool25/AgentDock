@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -53,11 +54,27 @@ class MemoryManager:
 
     async def list_files(self) -> list[MemoryFileInfo]:
         files: list[MemoryFileInfo] = []
+        loop = asyncio.get_event_loop()
         for p in sorted(self.base_path.glob("**/*.md")):
             stat = p.stat()
+            commit_hash = await loop.run_in_executor(None, self._get_commit_hash, p)
             files.append(MemoryFileInfo(
                 filename=str(p.relative_to(self.base_path)),
                 size=stat.st_size,
                 last_modified=datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                last_commit_hash=commit_hash,
             ))
         return files
+
+    def _get_commit_hash(self, file_path: Path) -> Optional[str]:
+        """Get last git commit hash for a file. Returns None if not committed."""
+        try:
+            rel = str(file_path.relative_to(self.base_path))
+            result = subprocess.run(
+                ["git", "log", "--format=%H", "-1", "--", rel],
+                cwd=self.base_path, capture_output=True, text=True,
+            )
+            h = result.stdout.strip()
+            return h if h else None
+        except Exception:
+            return None

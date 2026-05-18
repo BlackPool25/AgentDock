@@ -4,12 +4,14 @@ import { startWorker } from "./queue/worker.js";
 import { queueRoutes } from "./api/routes/queue.js";
 import { providerRoutes } from "./api/routes/providers.js";
 import { healthRoutes } from "./api/routes/health.js";
+import { chatRoutes } from "./api/routes/chat.js";
 
 const app = new Hono();
 
 app.route("/api/queue", queueRoutes);
 app.route("/api/providers", providerRoutes);
 app.route("/api/health", healthRoutes);
+app.route("/api/chat", chatRoutes);
 
 app.onError((err, c) => {
   logger.error({ err: err.message }, "Unhandled error");

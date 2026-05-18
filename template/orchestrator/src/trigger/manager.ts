@@ -6,6 +6,11 @@ import { logger } from "../logger.js";
 
 const AGENT_PORT = 8080;
 const SYSTEM_ID = process.env.SYSTEM_ID ?? "unknown";
+const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function sendTask(
   toAgentId: string,
@@ -15,16 +20,33 @@ async function sendTask(
 ) {
   const taskId = randomUUID();
   const url = `http://${toAgentId}:${AGENT_PORT}/tasks`;
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId, senderId: "orchestrator", instruction, context, attachedFiles }),
-    });
-    wsHub.broadcast({ type: "agent:task:started", agentId: toAgentId, systemId: SYSTEM_ID, taskId, timestamp: new Date().toISOString() });
-    logger.info({ toAgentId, taskId }, "Task dispatched");
-  } catch (err) {
-    logger.error({ toAgentId, taskId, err }, "Failed to dispatch task");
+  const payload = { taskId, senderId: "orchestrator", instruction, context, attachedFiles };
+
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      if (res.status === 202) {
+        wsHub.broadcast({ type: "agent:task:started", agentId: toAgentId, systemId: SYSTEM_ID, taskId, timestamp: new Date().toISOString() });
+        logger.info({ toAgentId, taskId, attempt }, "Task dispatched");
+        return;
+      }
+      throw new Error(`Agent returned ${res.status}`);
+    } catch (err) {
+      if (attempt === RETRY_DELAYS_MS.length) {
+        logger.error({ toAgentId, taskId, err }, "Task delivery failed after all retries");
+        wsHub.broadcast({ type: "agent:task:failed", agentId: toAgentId, systemId: SYSTEM_ID, taskId, error: String(err), timestamp: new Date().toISOString() });
+        return;
+      }
+      const delay = RETRY_DELAYS_MS[attempt] ?? 16000;
+      logger.warn({ toAgentId, taskId, attempt, delay }, "Task delivery retry");
+      await sleep(delay);
+    }
   }
 }
 
