@@ -1,6 +1,6 @@
 {
-  "name": "agentdock-llm-gateway",
-  "version": "1.0.0",
+  "name": "@agentdock/llm-gateway",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "bun run --hot src/index.ts",
@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agentdock/shared-types": "workspace:*",
     "hono": "^4.4.0",
     "@hono/zod-validator": "^0.3.0",
     "bullmq": "^5.12.0",

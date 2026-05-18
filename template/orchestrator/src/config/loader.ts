@@ -30,7 +30,16 @@ const WorkflowSchema = z.object({
 const AgentConfigSchema = z.object({
   agent: z.object({ id: z.string(), name: z.string() }),
   expose: z.array(z.string()).default([]),
-  triggers: z.array(z.object({ type: z.string() })).default([]),
+  triggers: z.array(z.object({
+    type: z.string(),
+    actionName: z.string().optional(),
+    webhook_input_schema: z.array(z.object({
+      name: z.string(),
+      type: z.string().default("string"),
+      required: z.boolean().default(false),
+      description: z.string().optional(),
+    })).optional().default([]),
+  })).default([]),
   ports: z.object({ internal: z.number().default(8080) }).default({}),
 });
 

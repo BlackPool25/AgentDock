@@ -51,6 +51,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     memory = MemoryManager(Path(config.memory.path), config.memory.git_auto_commit, rag)
     memory.setup()
 
+    # 3.5 Wire memory to RAG for self-learning
+    if rag.enabled:
+        rag.set_memory_manager(memory)
+
     # 4. Seed files (copy from /app/seed/ to /memory/ if present)
     _seed_memory(memory.base_path)
 

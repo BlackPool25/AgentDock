@@ -10,10 +10,17 @@ export const LLMProviderSchema = z.enum([
 
 export const MCPConfigSchema = z.object({
   name: z.string(),
-  transport: z.enum(["sse", "stdio"]),
+  transport: z.enum(["sse", "stdio", "streamable-http", "http"]),
   url: z.string().optional(),
   command: z.string().optional(),
   env: z.record(z.string()).default({}),
+});
+
+export const WebhookInputFieldSchema = z.object({
+  name: z.string(),
+  type: z.enum(["string", "number", "boolean", "file"]).default("string"),
+  required: z.boolean().default(false),
+  description: z.string().optional(),
 });
 
 // ─── Agent Action: a named task the agent can execute when triggered ───────────
@@ -43,6 +50,10 @@ export const RAGConfigSchema = z.object({
   top_k: z.number().int().default(5),
   chunk_size: z.number().int().default(500),
   chunk_overlap: z.number().int().default(50),
+  // Self-learning loop: stores successful query-answer pairs for future reference
+  self_learning: z.boolean().default(false),
+  self_learning_file: z.string().default("rag-learned.md"),
+  min_confidence_threshold: z.number().min(0).max(1).default(0.3),
 });
 
 export const TriggerConfigSchema = z.discriminatedUnion("type", [
@@ -55,7 +66,8 @@ export const TriggerConfigSchema = z.discriminatedUnion("type", [
   }),
   z.object({ 
     type: z.literal("webhook"),
-    actionName: z.string().optional()
+    actionName: z.string().optional(),
+    webhook_input_schema: z.array(WebhookInputFieldSchema).default([]),
   }),
 ]);
 
@@ -89,7 +101,11 @@ export const AgentDesignSchema = z.object({
     readableBy: z.array(z.string()).default([]),
   }),
   rag: RAGConfigSchema.default({}),
-  shell: z.object({ enabled: z.boolean().default(false) }),
+  shell: z.object({ 
+    enabled: z.boolean().default(false),
+    level: z.enum(["root", "restricted"]).default("restricted"),
+    allowed_commands: z.array(z.string()).default([]),
+  }),
   mcps: z.array(MCPConfigSchema).default([]),
   tools: z.object({
     pythonPackages: z.array(z.string()).default([]),
@@ -97,7 +113,7 @@ export const AgentDesignSchema = z.object({
   }),
   actions: z.array(AgentActionSchema).default([]),
   triggers: z.array(TriggerConfigSchema).default([{ type: "task" }]),
-  expose: z.array(z.enum(["logs", "chat", "memory", "status", "tasks"])).default(["status", "logs"]),
+  expose: z.array(z.enum(["logs", "chat", "memory", "status", "tasks", "shell"])).default(["status", "logs"]),
   seedFiles: z.array(SeedFileSchema).default([]),
   insufficientInput: InsufficientInputConfigSchema.default({}),
 });
@@ -170,10 +186,14 @@ export const AgentConfigSchema = z.object({
     readable_by: z.array(z.string()).default([]),
   }).default({}),
   rag: RAGConfigSchema.default({}),
-  shell: z.object({ enabled: z.boolean().default(false) }).default({}),
+  shell: z.object({
+    enabled: z.boolean().default(false),
+    level: z.enum(["root", "restricted"]).default("restricted"),
+    allowed_commands: z.array(z.string()).default([]),
+  }).default({}),
   mcps: z.array(z.object({
     name: z.string(),
-    transport: z.enum(["sse", "stdio"]),
+    transport: z.enum(["sse", "stdio", "streamable-http", "http"]),
     url: z.string().optional(),
     command: z.string().optional(),
     env: z.record(z.string()).default({}),
@@ -202,7 +222,7 @@ export const AgentConfigSchema = z.object({
     fallback_action: z.enum(["return_error", "ask_clarification", "use_defaults"]).default("return_error"),
   }).default({}),
   triggers: z.array(TriggerConfigSchema).default([{ type: "task" }]),
-  expose: z.array(z.enum(["logs", "chat", "memory", "status", "tasks"])).default(["status", "logs"]),
+  expose: z.array(z.enum(["logs", "chat", "memory", "status", "tasks", "shell"])).default(["status", "logs"]),
   ports: z.object({ internal: z.number().int().default(8080) }).default({}),
 });
 

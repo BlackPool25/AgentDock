@@ -4,7 +4,7 @@ import { logger } from "../logger.js";
 
 const AGENT_PORT = 8080;
 
-type ExposeOption = "logs" | "chat" | "memory" | "status" | "tasks";
+type ExposeOption = "logs" | "chat" | "memory" | "status" | "tasks" | "shell";
 
 const ENDPOINT_EXPOSE_MAP: Record<string, ExposeOption> = {
   status: "status",
@@ -13,6 +13,8 @@ const ENDPOINT_EXPOSE_MAP: Record<string, ExposeOption> = {
   chat: "chat",
   tasks: "tasks",
   files: "tasks",
+  shell: "shell",
+  rag: "status",  // RAG status/reindex gated by status expose
 };
 
 export async function proxyToAgent(

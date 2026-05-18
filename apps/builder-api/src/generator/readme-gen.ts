@@ -49,7 +49,7 @@ export function generateReadme(design: SystemDesign): string {
       lines.push(`  -d '{"message": "What have you found so far?"}'`);
       lines.push(`\`\`\``);
     }
-    if (exposed.has("rag")) {
+    if ((exposed as Set<string>).has("rag")) {
       lines.push(`\`\`\`bash`);
       lines.push(`# RAG status`);
       lines.push(`curl ${base}/api/agents/${a.id}/rag/status \\`);

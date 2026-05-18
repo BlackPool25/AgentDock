@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from typing import Any, TYPE_CHECKING, Optional
 import structlog
 
@@ -12,7 +13,37 @@ if TYPE_CHECKING:
 
 log = structlog.get_logger()
 
-MAX_TOOL_ROUNDS = 10  # Hard limit — prevents infinite loops
+MAX_TOOL_ROUNDS = 15  # Hard limit — prevents infinite loops
+
+# System addendum injected when tools are available — forces the LLM to actually use them
+_TOOL_USE_ADDENDUM = """
+IMPORTANT: You have access to tools. You MUST use them to gather real information before writing your output.
+Do NOT describe what you would do — actually DO it by calling the tools.
+Think step by step, call the tools you need, then write your final answer.
+"""
+
+# Marker used to separate thinking from final output in the prompt
+_OUTPUT_MARKER = "\n\n---FINAL OUTPUT---\n"
+_OUTPUT_MARKER_INSTRUCTION = (
+    "\n\nWhen you have finished all tool calls and have all the information you need, "
+    "write your final output after the exact line: ---FINAL OUTPUT---\n"
+    "Everything before that line is your working notes. Only what comes after is the deliverable."
+)
+
+
+def _extract_final_output(text: str) -> str:
+    """
+    Extract the content after ---FINAL OUTPUT--- marker.
+    If no marker, return the full text (backward compat).
+    """
+    if "---FINAL OUTPUT---" in text:
+        parts = text.split("---FINAL OUTPUT---", 1)
+        extracted = parts[1].strip()
+        return extracted if extracted else text.strip()
+    # Fallback: strip common LLM preamble patterns
+    # Remove "Would you like me to..." trailing questions
+    text = re.sub(r"\n+Would you like me to.*$", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+    return text
 
 
 class AgentLoop:
@@ -33,7 +64,7 @@ class AgentLoop:
     async def run(self, task: "TaskPayload", system_prompt: str) -> str:
         """
         Run the full agentic loop for a task.
-        Returns the final text output when the LLM stops requesting tool calls.
+        Returns the final extracted output (not the full conversation).
         """
         import base64
 
@@ -49,15 +80,22 @@ class AgentLoop:
         if self.config.shell.enabled:
             all_tools.append(self._build_shell_tool_definition())
 
-        # 3. Retrieve relevant RAG context for this task
+        # 3. Retrieve relevant RAG context for this task (with metadata for self-learning)
         rag_context = ""
+        rag_result = None
         if self.rag:
-            rag_context = await self.rag.query(task.instruction)
+            rag_result = await self.rag.query_with_metadata(task.instruction)
+            rag_context = rag_result.context
 
-        # 4. Build initial message history
-        messages = self._build_initial_messages(task, system_prompt, rag_context)
+        # 4. Build system prompt — inject tool-use instruction and output marker when tools present
+        effective_system = system_prompt
+        if all_tools:
+            effective_system = effective_system + _TOOL_USE_ADDENDUM + _OUTPUT_MARKER_INSTRUCTION
 
-        # 5. Check for insufficient input
+        # 5. Build initial message history
+        messages = self._build_initial_messages(task, effective_system, rag_context)
+
+        # 6. Check for insufficient input
         if self.config.insufficient_input.enabled:
             is_insufficient = await self._check_input_sufficiency(task, messages)
             if is_insufficient:
@@ -70,7 +108,7 @@ class AgentLoop:
                 elif cfg.fallback_action == "use_defaults":
                     messages.append({"role": "system", "content": "Input may be incomplete. Proceed with available information and reasonable defaults."})
 
-        # 6. THE LOOP
+        # 7. THE LOOP
         for round_num in range(MAX_TOOL_ROUNDS):
             log.info("agent_loop.round", round=round_num, task_id=task.taskId)
 
@@ -80,10 +118,14 @@ class AgentLoop:
             )
 
             # Add assistant response to history
-            assistant_msg: dict[str, Any] = {"role": "assistant", "content": response.content}
+            assistant_msg: dict[str, Any] = {"role": "assistant", "content": response.content or ""}
             if response.tool_calls:
                 assistant_msg["tool_calls"] = [
-                    {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": __import__("json").dumps(tc.arguments)}}
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.name, "arguments": __import__("json").dumps(tc.arguments)},
+                    }
                     for tc in response.tool_calls
                 ]
             messages.append(assistant_msg)
@@ -91,7 +133,15 @@ class AgentLoop:
             # If no tool calls → LLM is done
             if not response.tool_calls:
                 log.info("agent_loop.complete", rounds=round_num + 1, task_id=task.taskId)
-                return response.content
+                final_output = _extract_final_output(response.content or "")
+                # Self-learning: store successful RAG query-answer pairs
+                if self.rag and rag_result and rag_result.has_relevant_results:
+                    await self.rag.learn_from_query(
+                        query=task.instruction,
+                        answer=final_output,
+                        confidence=rag_result.best_distance,
+                    )
+                return final_output
 
             # Execute each tool call and collect results
             for tool_call in response.tool_calls:
@@ -101,15 +151,28 @@ class AgentLoop:
                     "tool_call_id": tool_call.id,
                     "content": result,
                 })
-                log.info("agent_loop.tool_executed", tool=tool_call.name, task_id=task.taskId)
+                log.info(
+                    "agent_loop.tool_executed",
+                    tool=tool_call.name,
+                    task_id=task.taskId,
+                    result_len=len(result),
+                )
 
-        # Hit MAX_TOOL_ROUNDS — return last content
+        # Hit MAX_TOOL_ROUNDS — return last assistant content
         log.warning("agent_loop.max_rounds_hit", task_id=task.taskId)
         last_content = next(
             (m.get("content", "") for m in reversed(messages) if m.get("role") == "assistant"),
             "Max tool rounds reached without final answer.",
         )
-        return last_content or "Max tool rounds reached without final answer."
+        final_output = _extract_final_output(last_content or "Max tool rounds reached without final answer.")
+        # Self-learning even on max rounds (the answer might still be useful)
+        if self.rag and rag_result and rag_result.has_relevant_results:
+            await self.rag.learn_from_query(
+                query=task.instruction,
+                answer=final_output,
+                confidence=rag_result.best_distance,
+            )
+        return final_output
 
     async def _execute_tool(self, tool_call: "ToolCall") -> str:
         """Route tool call to correct executor. Returns string result."""
@@ -117,6 +180,8 @@ class AgentLoop:
             try:
                 result = await self.shell.execute(tool_call.arguments.get("command", ""))
                 return f"exit_code: {result.exit_code}\nstdout: {result.stdout}\nstderr: {result.stderr}"
+            except PermissionError as e:
+                return f"Shell permission denied: {str(e)}"
             except Exception as e:
                 return f"Shell error: {str(e)}"
 
@@ -126,10 +191,13 @@ class AgentLoop:
             return str(result)
         except Exception as e:
             log.error("agent_loop.tool_error", tool=tool_call.name, error=str(e))
-            return f"Tool error: {str(e)}"
+            return f"Tool error ({tool_call.name}): {str(e)}"
 
-    def _build_initial_messages(self, task: "TaskPayload", system_prompt: str, rag_context: str = "") -> list[dict[str, Any]]:
+    def _build_initial_messages(
+        self, task: "TaskPayload", system_prompt: str, rag_context: str = ""
+    ) -> list[dict[str, Any]]:
         import base64
+
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
 
         # Inject seed file content
@@ -148,13 +216,13 @@ class AgentLoop:
         if rag_context:
             messages.append({
                 "role": "system",
-                "content": f"Relevant context from your knowledge base:\n\n{rag_context}"
+                "content": f"Relevant context from your knowledge base:\n\n{rag_context}",
             })
 
         # Include information about attached files
         if task.attachedFiles:
             file_info = "\n".join([
-                f"- {f.filename} (saved to /storage/received/{task.senderId}/{f.filename})"
+                f"- {f.filename} (type: {f.mimeType}, saved to /storage/received/{task.senderId}/{f.filename})"
                 for f in task.attachedFiles
             ])
             messages.append({
@@ -163,35 +231,51 @@ class AgentLoop:
             })
             # Inline text files as context
             for f in task.attachedFiles:
-                if f.mimeType.startswith("text/") or f.filename.endswith(".md"):
+                if f.mimeType.startswith("text/") or f.filename.endswith((".md", ".txt", ".yaml", ".json")):
                     try:
                         content = base64.b64decode(f.content).decode("utf-8", errors="replace")
-                        messages.append({"role": "user", "content": f"<attached_file name=\"{f.filename}\">\n{content}\n</attached_file>"})
-                        messages.append({"role": "assistant", "content": f"I have read the attached file: {f.filename}"})
+                        messages.append({
+                            "role": "user",
+                            "content": f'<attached_file name="{f.filename}">\n{content}\n</attached_file>',
+                        })
+                        messages.append({
+                            "role": "assistant",
+                            "content": f"I have read the attached file: {f.filename}",
+                        })
                     except Exception:
                         pass
 
         messages.append({"role": "user", "content": task.instruction})
         return messages
 
-    async def _check_input_sufficiency(self, task: "TaskPayload", messages: list[dict[str, Any]]) -> bool:
-        """Use LLM to check if input is sufficient to proceed."""
+    async def _check_input_sufficiency(
+        self, task: "TaskPayload", messages: list[dict[str, Any]]
+    ) -> bool:
         check_messages = [
-            {"role": "system", "content": "You are evaluating whether the provided input contains enough information to proceed with the task. Respond with only 'SUFFICIENT' or 'INSUFFICIENT'."},
+            {
+                "role": "system",
+                "content": "You are evaluating whether the provided input contains enough information to proceed with the task. Respond with only 'SUFFICIENT' or 'INSUFFICIENT'.",
+            },
         ] + messages
         try:
             response = await self.gateway.chat(messages=check_messages, tools=None)
-            return "INSUFFICIENT" in response.content.upper()
+            return "INSUFFICIENT" in (response.content or "").upper()
         except Exception as e:
             log.warning("input_check_failed", error=str(e))
             return False
 
     def _build_shell_tool_definition(self) -> dict[str, Any]:
+        level = getattr(self.config.shell, "level", "restricted")
+        desc = (
+            "Execute a shell command in the /workspace directory. "
+            "Returns stdout, stderr, and exit code. "
+            + ("You have root-level access." if level == "root" else "Restricted to allowed commands only.")
+        )
         return {
             "type": "function",
             "function": {
                 "name": "shell_execute",
-                "description": "Execute a shell command in the /workspace directory. Returns stdout, stderr, and exit code.",
+                "description": desc,
                 "parameters": {
                     "type": "object",
                     "properties": {

@@ -45,11 +45,13 @@ class TaskRecord(BaseModel):
 
 
 class TaskReceiver:
-    def __init__(self, memory_manager: Any, llm_client: Any, config: Any = None, rag_manager: Optional[Any] = None) -> None:
+    def __init__(self, memory_manager: Any, llm_client: Any, config: Any = None, rag_manager: Optional[Any] = None, mcp_manager: Optional[Any] = None, shell_executor: Optional[Any] = None) -> None:
         self.memory = memory_manager
         self.llm = llm_client
         self.config = config
         self.rag = rag_manager
+        self.mcp = mcp_manager
+        self.shell = shell_executor
         self._pending: dict[str, TaskPayload] = {}
         self._pending_action: dict[str, Any] = {}
         self._tasks: list[TaskRecord] = []
@@ -106,7 +108,7 @@ class TaskReceiver:
         )
         self._tasks.append(record)
         self._current_task = task_id
-        self._last_activity = ts  # Bug 7 fix: set on receipt
+        self._last_activity = ts
 
         await self.memory.append(
             "task_queue.md",
@@ -130,7 +132,7 @@ class TaskReceiver:
             system_prompt = (self.config.llm.system_prompt or "") if self.config else ""
             if action and action.prompt_template:
                 system_prompt = self._render_template(action.prompt_template, payload)
-            loop = AgentLoop(self.llm, self.config, self.rag)
+            loop = AgentLoop(self.llm, self.mcp, self.shell, self.config, self.rag)
             output = await loop.run(payload, system_prompt)
             await self.complete(task_id, output)
         except Exception as e:
@@ -139,10 +141,17 @@ class TaskReceiver:
 
     def _render_template(self, template: str, payload: TaskPayload) -> str:
         result = template
+        # Replace all context variables: {{input.key}}
         for key, val in payload.context.items():
             result = result.replace(f"{{{{input.{key}}}}}", str(val))
+        # Built-in variables
         result = result.replace("{{input.instruction}}", payload.instruction)
         result = result.replace("{{input.request}}", payload.instruction)
+        result = result.replace("{{input.sender}}", payload.senderId)
+        result = result.replace("{{input.filename}}", str(payload.context.get("filename", "")))
+        result = result.replace("{{input.sourceAgent}}", str(payload.context.get("sourceAgentId", "")))
+        result = result.replace("{{input.filePath}}", str(payload.context.get("filePath", "")))
+        # Remove any remaining unresolved placeholders
         result = re.sub(r"\{\{input\.[^}]+\}\}", "", result)
         return result.strip()
 
@@ -161,13 +170,12 @@ class TaskReceiver:
         action = self._pending_action.pop(task_id, None)
         self._pending.pop(task_id, None)
 
-        # Bug 2 fix: write output_{id}.md directly — no git commit, no memory:written event
+        # Write internal output file bypassing memory written events
         output_path = self.memory.base_path / f"output_{task_id}.md"
         output_path.write_text(output)
 
         await self.memory.write("state.md", f"current_task: {task_id}\nstatus: completed\n")
 
-        # If action has output_file, write it and fire file_received trigger
         if action and action.output_file:
             await self.write_memory_and_notify(action.output_file, output)
 

@@ -141,10 +141,17 @@ class TaskReceiver:
 
     def _render_template(self, template: str, payload: TaskPayload) -> str:
         result = template
+        # Replace all context variables: {{input.key}}
         for key, val in payload.context.items():
             result = result.replace(f"{{{{input.{key}}}}}", str(val))
+        # Built-in variables
         result = result.replace("{{input.instruction}}", payload.instruction)
         result = result.replace("{{input.request}}", payload.instruction)
+        result = result.replace("{{input.sender}}", payload.senderId)
+        result = result.replace("{{input.filename}}", str(payload.context.get("filename", "")))
+        result = result.replace("{{input.sourceAgent}}", str(payload.context.get("sourceAgentId", "")))
+        result = result.replace("{{input.filePath}}", str(payload.context.get("filePath", "")))
+        # Remove any remaining unresolved placeholders
         result = re.sub(r"\{\{input\.[^}]+\}\}", "", result)
         return result.strip()
 

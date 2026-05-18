@@ -47,6 +47,10 @@ class RAGConfig(BaseModel):
     top_k: int = 5
     chunk_size: int = 500
     chunk_overlap: int = 50
+    # Self-learning loop configuration
+    self_learning: bool = False
+    self_learning_file: str = "rag-learned.md"
+    min_confidence_threshold: float = 0.3  # Only learn from queries with distance < this
 
 
 class ShellConfig(BaseModel):
@@ -57,10 +61,17 @@ class ShellConfig(BaseModel):
 
 class MCPServerConfig(BaseModel):
     name: str
-    transport: Literal["sse", "stdio"]
+    transport: Literal["sse", "stdio", "streamable-http", "http"]
     url: Optional[str] = None
     command: Optional[str] = None
     env: dict[str, str] = Field(default_factory=dict)
+
+
+class WebhookInputField(BaseModel):
+    name: str
+    type: Literal["string", "number", "boolean", "file"] = "string"
+    required: bool = False
+    description: Optional[str] = None
 
 
 class ToolsConfig(BaseModel):
@@ -73,6 +84,8 @@ class TriggerConfig(BaseModel):
     schedule: Optional[str] = None
     timezone: str = "UTC"
     actionName: Optional[str] = None
+    # Webhook-specific: defines the expected input fields (used for validation + UI)
+    webhook_input_schema: list["WebhookInputField"] = Field(default_factory=list)
 
 
 class SeedFileConfig(BaseModel):

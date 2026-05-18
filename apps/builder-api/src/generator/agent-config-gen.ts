@@ -25,7 +25,11 @@ export function generateAgentConfig(agent: AgentDesign): string {
       readable_by: agent.memory.readableBy,
     },
     rag: agent.rag || undefined,
-    shell: { enabled: agent.shell.enabled },
+    shell: { 
+      enabled: agent.shell.enabled,
+      level: agent.shell.level ?? "restricted",
+      allowed_commands: agent.shell.allowed_commands ?? [],
+    },
     mcps: agent.mcps.map((mcp) => ({
       name: mcp.name,
       transport: mcp.transport,
@@ -54,7 +58,18 @@ export function generateAgentConfig(agent: AgentDesign): string {
       extracted_text: sf.extractedText,
     })),
     insufficient_input: agent.insufficientInput || { enabled: false },
-    triggers: agent.triggers,
+    triggers: agent.triggers.map((t) => {
+      if (t.type === "webhook") {
+        return {
+          type: "webhook",
+          ...(t.actionName ? { actionName: t.actionName } : {}),
+          ...((t as any).webhook_input_schema?.length
+            ? { webhook_input_schema: (t as any).webhook_input_schema }
+            : {}),
+        };
+      }
+      return t;
+    }),
     expose: agent.expose,
     ports: { internal: 8080 },
   };

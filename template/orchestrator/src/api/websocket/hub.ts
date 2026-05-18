@@ -1,21 +1,35 @@
-type WsClient = { send: (data: string) => void; readyState: number };
+import type { AgentEvent } from "@agentdock/shared-types";
+import { logger } from "../logger.js";
 
-class WsHub {
-  private clients = new Map<string, WsClient>();
+type WSClient = { send: (data: string) => void; readyState: number };
 
-  add(id: string, ws: WsClient) { this.clients.set(id, ws); }
-  remove(id: string) { this.clients.delete(id); }
+class WebSocketHub {
+  private clients = new Map<string, WSClient>();
 
-  broadcast(event: unknown) {
-    const msg = JSON.stringify(event);
+  add(id: string, ws: WSClient): void {
+    this.clients.set(id, ws);
+    logger.info({ clientId: id, total: this.clients.size }, "WS client connected");
+  }
+
+  remove(id: string): void {
+    this.clients.delete(id);
+    logger.info({ clientId: id, total: this.clients.size }, "WS client disconnected");
+  }
+
+  broadcast(event: AgentEvent): void {
+    const payload = JSON.stringify(event);
     for (const [id, ws] of this.clients) {
       if (ws.readyState === 1) {
-        ws.send(msg);
+        ws.send(payload);
       } else {
         this.clients.delete(id);
       }
     }
   }
+
+  size(): number {
+    return this.clients.size;
+  }
 }
 
-export const wsHub = new WsHub();
+export const wsHub = new WebSocketHub();

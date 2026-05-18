@@ -1,6 +1,20 @@
 from __future__ import annotations
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
+
+
+class ActionInputSchema(BaseModel):
+    type: str = "object"
+    properties: dict[str, Any] = Field(default_factory=dict)
+
+
+class ActionConfig(BaseModel):
+    name: str
+    description: Optional[str] = None
+    input_schema: Optional[ActionInputSchema] = None
+    output_schema: Optional[ActionInputSchema] = None
+    prompt_template: Optional[str] = None
+    output_file: Optional[str] = None
 
 
 class LLMConfig(BaseModel):
@@ -18,31 +32,6 @@ class MemoryConfig(BaseModel):
     writable_by: list[str] = Field(default_factory=list)
 
 
-class ShellConfig(BaseModel):
-    enabled: bool = False
-    level: Literal["root", "restricted"] = "restricted"
-    allowed_commands: list[str] = Field(default_factory=list)
-
-
-class MCPServerConfig(BaseModel):
-    name: str
-    transport: Literal["sse", "stdio"]
-    url: Optional[str] = None
-    command: Optional[str] = None
-    env: dict[str, str] = Field(default_factory=dict)
-
-
-class ToolsConfig(BaseModel):
-    python_packages: list[str] = Field(default_factory=list)
-    system_packages: list[str] = Field(default_factory=list)
-
-
-class TriggerConfig(BaseModel):
-    type: Literal["task", "cron", "webhook"]
-    schedule: Optional[str] = None
-    timezone: str = "UTC"
-
-
 class RAGFolderConfig(BaseModel):
     path: str
     auto_index: bool = True
@@ -58,13 +47,59 @@ class RAGConfig(BaseModel):
     top_k: int = 5
     chunk_size: int = 500
     chunk_overlap: int = 50
+    # Self-learning loop configuration
+    self_learning: bool = False
+    self_learning_file: str = "rag-learned.md"
+    min_confidence_threshold: float = 0.3  # Only learn from queries with distance < this
 
 
-class ActionConfig(BaseModel):
+class ShellConfig(BaseModel):
+    enabled: bool = False
+    level: Literal["root", "restricted"] = "restricted"
+    allowed_commands: list[str] = Field(default_factory=list)
+
+
+class MCPServerConfig(BaseModel):
     name: str
+    transport: Literal["sse", "stdio", "streamable-http", "http"]
+    url: Optional[str] = None
+    command: Optional[str] = None
+    env: dict[str, str] = Field(default_factory=dict)
+
+
+class WebhookInputField(BaseModel):
+    name: str
+    type: Literal["string", "number", "boolean", "file"] = "string"
+    required: bool = False
     description: Optional[str] = None
-    prompt_template: Optional[str] = None
-    output_file: Optional[str] = None  # written to /memory, fires file_received trigger
+
+
+class ToolsConfig(BaseModel):
+    python_packages: list[str] = Field(default_factory=list)
+    system_packages: list[str] = Field(default_factory=list)
+
+
+class TriggerConfig(BaseModel):
+    type: Literal["task", "cron", "webhook"]
+    schedule: Optional[str] = None
+    timezone: str = "UTC"
+    actionName: Optional[str] = None
+    # Webhook-specific: defines the expected input fields (used for validation + UI)
+    webhook_input_schema: list["WebhookInputField"] = Field(default_factory=list)
+
+
+class SeedFileConfig(BaseModel):
+    filename: str
+    type: Literal["text", "pdf"]
+    content: Optional[str] = None
+    content_base64: Optional[str] = None
+    extracted_text: Optional[str] = None
+
+
+class InsufficientInputConfig(BaseModel):
+    enabled: bool = False
+    message: str = "I don't have enough information to proceed. Please provide more details."
+    fallback_action: Literal["return_error", "ask_clarification", "use_defaults"] = "return_error"
 
 
 class AgentMeta(BaseModel):
@@ -88,7 +123,8 @@ class AgentConfig(BaseModel):
     mcps: list[MCPServerConfig] = Field(default_factory=list)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     actions: list[ActionConfig] = Field(default_factory=list)
+    seed_files: list[SeedFileConfig] = Field(default_factory=list)
+    insufficient_input: InsufficientInputConfig = Field(default_factory=InsufficientInputConfig)
     triggers: list[TriggerConfig] = Field(default_factory=lambda: [TriggerConfig(type="task")])
     expose: list[str] = Field(default_factory=lambda: ["status", "logs"])
     ports: dict[str, int] = Field(default_factory=lambda: {"internal": 8080})
-

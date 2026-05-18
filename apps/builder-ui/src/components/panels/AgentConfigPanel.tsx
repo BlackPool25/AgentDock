@@ -255,21 +255,47 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
               <input
                 type="checkbox"
                 checked={data.shell.enabled}
-                onChange={(e) => update({ shell: { enabled: e.target.checked } })}
+                onChange={(e) => update({ shell: { ...data.shell, enabled: e.target.checked } })}
                 className="accent-primary"
               />
               <span className="text-sm">Enable shell access</span>
             </label>
             {data.shell.enabled && (
-              <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 space-y-1">
-                <div className="flex items-center gap-1.5 text-amber-400">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span className="text-xs font-medium">Security Warning</span>
+              <>
+                <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 space-y-1">
+                  <div className="flex items-center gap-1.5 text-amber-400">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span className="text-xs font-medium">Security Warning</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Shell access allows the agent to execute commands inside its container. The container is isolated — host is not affected.
+                  </p>
                 </div>
-                <p className="text-[10px] text-muted-foreground">
-                  Shell access allows the agent to execute commands on the host. Only enable for trusted agents.
-                </p>
-              </div>
+                <Field label="Permission Level">
+                  <select
+                    className="input text-xs"
+                    value={(data.shell as any).level ?? "restricted"}
+                    onChange={(e) => update({ shell: { ...data.shell, level: e.target.value as any } })}
+                  >
+                    <option value="restricted">Restricted (allowlist only)</option>
+                    <option value="root">Root (full sudo access)</option>
+                  </select>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Root level uses passwordless sudo inside the container. Safe — container is isolated.
+                  </p>
+                </Field>
+                {(data.shell as any).level !== "root" && (
+                  <Field label="Allowed Commands (one per line)">
+                    <textarea
+                      className="input resize-none font-mono text-xs"
+                      rows={4}
+                      placeholder={"ls\ncat\ngrep\nps"}
+                      value={((data.shell as any).allowed_commands ?? []).join("\n")}
+                      onChange={(e) => update({ shell: { ...data.shell, allowed_commands: e.target.value.split("\n").filter(Boolean) } as any })}
+                    />
+                  </Field>
+                )}
+              </>
             )}
           </div>
         )}
@@ -277,7 +303,8 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
         {tab === "MCPs" && (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              MCP servers provide external tools this agent can use (web search, file access, etc).
+              MCP servers provide external tools this agent can call (web search, file access, APIs, etc).
+              Env vars use <code className="bg-muted px-1 rounded text-[10px]">${"{VAR_NAME}"}</code> syntax — values come from the runtime <code className="bg-muted px-1 rounded text-[10px]">.env</code>.
             </p>
             {(data.mcps || []).map((mcp, i) => (
               <div key={i} className="p-3 rounded border border-border space-y-2">
@@ -292,7 +319,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                 </div>
                 <input
                   className="input text-xs"
-                  placeholder="Name (e.g. youtube-mcp)"
+                  placeholder="Name (e.g. filesystem, brave-search)"
                   value={mcp.name}
                   onChange={(e) => {
                     const mcps = [...data.mcps];
@@ -305,17 +332,18 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                   value={mcp.transport}
                   onChange={(e) => {
                     const mcps = [...data.mcps];
-                    mcps[i] = { ...mcps[i], transport: e.target.value as "sse" | "stdio", url: "", command: "" };
+                    mcps[i] = { ...mcps[i], transport: e.target.value as any, url: "", command: "" };
                     update({ mcps });
                   }}
                 >
-                  <option value="sse">SSE (HTTP)</option>
-                  <option value="stdio">stdio (local process)</option>
+                  <option value="sse">SSE (legacy HTTP)</option>
+                  <option value="streamable-http">Streamable HTTP (recommended)</option>
+                  <option value="stdio">stdio (local subprocess)</option>
                 </select>
-                {mcp.transport === "sse" ? (
+                {(mcp.transport === "sse" || mcp.transport === "streamable-http" || mcp.transport === "http") ? (
                   <input
                     className="input text-xs font-mono"
-                    placeholder="http://mcp-server:3000/sse"
+                    placeholder={mcp.transport === "sse" ? "http://mcp-server:3000/sse" : "http://mcp-server:3000/mcp"}
                     value={mcp.url ?? ""}
                     onChange={(e) => {
                       const mcps = [...data.mcps];
@@ -326,7 +354,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                 ) : (
                   <input
                     className="input text-xs font-mono"
-                    placeholder="command (e.g. npx @modelcontextprotocol/server-filesystem)"
+                    placeholder="npx -y @modelcontextprotocol/server-filesystem /workspace"
                     value={mcp.command ?? ""}
                     onChange={(e) => {
                       const mcps = [...data.mcps];
@@ -336,7 +364,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                   />
                 )}
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Env vars</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Environment Variables</p>
                   {Object.entries(mcp.env || {}).map(([k, v], ei) => (
                     <div key={ei} className="flex gap-1">
                       <input
@@ -345,22 +373,21 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                         value={k}
                         onChange={(e) => {
                           const mcps = [...data.mcps];
-                          const env = Object.fromEntries(
-                            Object.entries(mcps[i].env || {}).map(([ek, ev], idx) =>
-                              idx === ei ? [e.target.value, ev] : [ek, ev]
-                            )
-                          );
-                          mcps[i] = { ...mcps[i], env };
+                          const entries = Object.entries(mcps[i].env || {});
+                          entries[ei] = [e.target.value, entries[ei][1]];
+                          mcps[i] = { ...mcps[i], env: Object.fromEntries(entries) };
                           update({ mcps });
                         }}
                       />
                       <input
                         className="input text-xs font-mono flex-1"
-                        placeholder="${ENV_VAR}"
+                        placeholder="${MY_API_KEY}"
                         value={v}
                         onChange={(e) => {
                           const mcps = [...data.mcps];
-                          mcps[i] = { ...mcps[i], env: { ...(mcps[i].env || {}), [k]: e.target.value } };
+                          const entries = Object.entries(mcps[i].env || {});
+                          entries[ei] = [entries[ei][0], e.target.value];
+                          mcps[i] = { ...mcps[i], env: Object.fromEntries(entries) };
                           update({ mcps });
                         }}
                       />
@@ -368,17 +395,15 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                         className="text-xs text-destructive px-1"
                         onClick={() => {
                           const mcps = [...data.mcps];
-                          const env = Object.fromEntries(
-                            Object.entries(mcps[i].env || {}).filter((_, idx) => idx !== ei)
-                          );
-                          mcps[i] = { ...mcps[i], env };
+                          const entries = Object.entries(mcps[i].env || {}).filter((_, idx) => idx !== ei);
+                          mcps[i] = { ...mcps[i], env: Object.fromEntries(entries) };
                           update({ mcps });
                         }}
                       >×</button>
                     </div>
                   ))}
                   <button
-                    className="text-xs text-primary hover:underline"
+                    className="text-[10px] text-primary hover:underline"
                     onClick={() => {
                       const mcps = [...data.mcps];
                       mcps[i] = { ...mcps[i], env: { ...(mcps[i].env || {}), "": "" } };
@@ -390,9 +415,9 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
             ))}
             <button
               className="text-xs text-primary hover:underline"
-              onClick={() => update({ mcps: [...data.mcps, { name: "", transport: "sse", url: "", env: {} }] })}
+              onClick={() => update({ mcps: [...data.mcps, { name: "", transport: "streamable-http", url: "", env: {} }] })}
             >
-              + Add MCP
+              + Add MCP Server
             </button>
           </div>
         )}
@@ -531,6 +556,64 @@ function TriggersTab({
                   {data.actions.map(a => <option key={a.name} value={a.name}>{a.name}</option>)}
                 </select>
               </Field>
+              <div className="space-y-2">
+                <p className="text-[10px] text-muted-foreground font-medium">Input Schema (defines accepted fields)</p>
+                {((trigger as any).webhook_input_schema ?? []).map((field: any, fi: number) => (
+                  <div key={fi} className="flex gap-1 items-center">
+                    <input
+                      className="input text-xs font-mono flex-1"
+                      placeholder="field_name"
+                      value={field.name}
+                      onChange={(e) => {
+                        const schema = [...((trigger as any).webhook_input_schema ?? [])];
+                        schema[fi] = { ...schema[fi], name: e.target.value };
+                        updateTrigger(i, { webhook_input_schema: schema });
+                      }}
+                    />
+                    <select
+                      className="input text-xs w-24"
+                      value={field.type}
+                      onChange={(e) => {
+                        const schema = [...((trigger as any).webhook_input_schema ?? [])];
+                        schema[fi] = { ...schema[fi], type: e.target.value };
+                        updateTrigger(i, { webhook_input_schema: schema });
+                      }}
+                    >
+                      <option value="string">string</option>
+                      <option value="number">number</option>
+                      <option value="boolean">bool</option>
+                      <option value="file">file</option>
+                    </select>
+                    <label className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={field.required}
+                        onChange={(e) => {
+                          const schema = [...((trigger as any).webhook_input_schema ?? [])];
+                          schema[fi] = { ...schema[fi], required: e.target.checked };
+                          updateTrigger(i, { webhook_input_schema: schema });
+                        }}
+                        className="accent-primary"
+                      />
+                      req
+                    </label>
+                    <button
+                      className="text-xs text-destructive px-1"
+                      onClick={() => {
+                        const schema = ((trigger as any).webhook_input_schema ?? []).filter((_: any, idx: number) => idx !== fi);
+                        updateTrigger(i, { webhook_input_schema: schema });
+                      }}
+                    >×</button>
+                  </div>
+                ))}
+                <button
+                  className="text-[10px] text-primary hover:underline"
+                  onClick={() => {
+                    const schema = [...((trigger as any).webhook_input_schema ?? []), { name: "", type: "string", required: false }];
+                    updateTrigger(i, { webhook_input_schema: schema });
+                  }}
+                >+ Add field</button>
+              </div>
             </div>
           )}
 

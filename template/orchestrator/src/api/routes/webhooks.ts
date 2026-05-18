@@ -1,41 +1,49 @@
 import { Hono } from "hono";
-import { randomUUID } from "crypto";
+import { validateApiKey } from "../../auth/jwt.js";
+import { containerName } from "../../docker/container-manager.js";
+import { env } from "../../config/env.js";
 import { logger } from "../../logger.js";
-import type { SystemConfig } from "../../config/loader.js";
+import { loadAgentConfig } from "../../workflow/parser.js";
 
-const AGENT_PORT = 8080;
+export const webhookRoutes = new Hono();
 
-export function createWebhookRoutes(config: SystemConfig) {
-  const app = new Hono();
+webhookRoutes.post("/:apiKey", async (c) => {
+  const apiKey = c.req.param("apiKey");
+  const keyData = validateApiKey(apiKey);
+  if (!keyData) {
+    return c.json({ error: "Invalid API key", code: "UNAUTHORIZED" }, 401);
+  }
 
-  // POST /webhooks/:agentId — trigger an agent via webhook
-  app.post("/:agentId", async (c) => {
-    const agentId = c.req.param("agentId");
-    if (!config.agents.has(agentId)) {
-      return c.json({ error: "Agent not found", code: "NOT_FOUND" }, 404);
+  const agentId = keyData.agentId;
+  const body = await c.req.json();
+  const target = `http://${containerName(env.SYSTEM_ID, agentId)}:8080/tasks`;
+
+  // Find if this agent has a webhook trigger with an explicit action
+  let actionName: string | undefined;
+  try {
+    const config = loadAgentConfig(agentId);
+    const trigger = config.triggers.find(t => t.type === "webhook");
+    if (trigger && "actionName" in trigger) {
+      actionName = trigger.actionName;
     }
+  } catch (err) {
+    logger.warn({ agentId, err }, "Could not load agent config for webhook context");
+  }
 
-    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-    const taskId = randomUUID();
-
-    try {
-      await fetch(`http://${agentId}:${AGENT_PORT}/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          taskId,
-          senderId: "webhook",
-          instruction: (body.instruction as string) ?? "Webhook triggered",
-          context: body.payload ?? body,
-        }),
-      });
-      logger.info({ agentId, taskId }, "Webhook trigger dispatched");
-      return c.json({ ok: true, taskId });
-    } catch (err) {
-      logger.error({ agentId, err }, "Webhook dispatch failed");
-      return c.json({ error: "Agent unreachable", code: "AGENT_UNREACHABLE" }, 502);
-    }
-  });
-
-  return app;
-}
+  try {
+    const res = await fetch(target, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        senderId: "webhook",
+        instruction: body.instruction || body.event || "Webhook triggered",
+        actionName,
+        context: body.payload || body,
+      }),
+    });
+    return c.json({ ok: res.ok, taskId: (await res.json() as any)?.taskId });
+  } catch (err) {
+    logger.error({ agentId, err }, "Webhook delivery failed");
+    return c.json({ error: "Agent unreachable", code: "PROXY_ERROR" }, 502);
+  }
+});

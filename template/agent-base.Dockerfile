@@ -6,8 +6,16 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
     python3 python3-pip curl wget git ffmpeg \
-    build-essential jq unzip ca-certificates \
+    build-essential jq unzip ca-certificates sudo \
     && rm -rf /var/lib/apt/lists/*
+
+# Configure passwordless sudo for all users (needed when shell.level=root)
+RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
+    echo 'agentdock ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Create non-root user for restricted shell agents
+RUN useradd -m -s /bin/bash agentdock && \
+    usermod -aG sudo agentdock
 
 # Install uv (Python package manager)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh

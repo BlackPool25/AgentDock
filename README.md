@@ -419,13 +419,18 @@ memory:
 
 shell:
   enabled: false
+  level: "restricted"        # "restricted" (allowed_commands only) | "root" (sudo access)
+  allowed_commands: []       # Used when level is "restricted"
 
 mcps:
   - name: "my-mcp"
-    transport: "sse"
+    transport: "sse"         # sse | stdio | streamable-http
     url: "http://my-mcp-server:3000/sse"
     env:
       MY_API_KEY: "${MY_API_KEY}"
+
+# Alternative: place a standard mcp.json in configs/ for Claude Desktop-compatible format
+# The agent loader merges mcp.json with YAML mcps automatically.
 
 tools:
   python_packages: ["requests", "beautifulsoup4"]
@@ -454,6 +459,7 @@ expose:
   - memory
   - chat
   - tasks
+  - shell              # Add to allow direct shell endpoint access via orchestrator proxy
 
 ports:
   internal: 8080
@@ -565,6 +571,7 @@ Use `temperature: 0.1–0.3` for any agent that calls tools. Higher temperatures
 - [x] Phase 7 — LLM Gateway implementation (BullMQ workers, all provider adapters, sync chat endpoint)
 - [x] Phase 8 — End-to-end integration (3-agent pipeline verified: webhook → coordinator → analyst → report-writer → coordinator)
 - [x] Phase 9 — v3 features (agentic tool loop, task delivery retry, structured logging, git commit hashes)
+- [x] Phase 10 — v4/v5 fixes (MCP SDK integration, output extraction, WS data stripping, sudo support, RAG self-learning, mcp.json, shell expose gating)
 
 ### Known Working
 
@@ -598,37 +605,38 @@ Use `temperature: 0.1–0.3` for any agent that calls tools. Higher temperatures
 | Analyst `tasks` not in `expose[]` | LOW | Added `tasks` to analyst expose list in generated configs |
 | `lastActivity` null on task receipt | LOW | `_last_activity` set in `receive()` not just `complete()`/`fail()` |
 
-### Known Working
-
-- Builder API: JWT auth on all protected routes including `/api/auth/me`
-- Builder API: System CRUD, versioned generations, zip download
-- Generated runtime: Full 3-agent pipeline with `task_completion`, `file_received` triggers
-- Generated runtime: `action_filter` on `task_completion` prevents pipeline loops
-- Generated runtime: Agent proxy strips `Authorization` header (prevents JWT rejection at agents)
-- Generated runtime: Agent `expose[]` gating — unexposed endpoints return 403
-- Generated runtime: Task tracking, logs, `currentTask`/`lastActivity` in status
-- Generated runtime: Action dispatch — agents pick correct action from config, write `output_file`, fire `file_received` triggers
-- Generated runtime: Git memory commits work correctly in Docker named volumes
-- Generated runtime: `lastCommitHash` populated per file via `git log --format=%H -1 -- <file>`
-- Generated runtime: `lastActivity` set on task receipt (not just completion)
-- Generated runtime: Structured logs captured into ring buffer — `/logs` endpoint returns real entries
-- Generated runtime: JWT 401 returns proper 401 response (not 500)
-- Generated runtime: Task delivery retries with exponential backoff (1s → 2s → 4s → 8s → 16s)
-- Generated runtime: Agentic tool loop — multi-turn LLM + MCP/shell tool execution per task
-- LLM Gateway: `POST /api/chat/sync` for synchronous agentic loop calls (bypasses BullMQ)
-- LLM Gateway: Tool calling support in OpenAI, Anthropic, Ollama providers
-
-### E2E Bug Fixes (v2 → v3)
+### E2E Bug Fixes (v3 → v4)
 
 | Bug | Severity | Fix |
 |---|---|---|
-| Double analyst dispatch (no `action_filter`) | CRITICAL | Added `action_filter: dispatch_research` to coordinator→analyst connection |
-| Duplicate `file_received` events | CRITICAL | `output_{id}.md` written directly without firing `agent:memory:written` |
-| `lastCommitHash` always null | MEDIUM | `git log --format=%H -1 -- <file>` per file in `list_files()` |
-| Empty logs ring buffer | MEDIUM | structlog processor captures all events into `_log_buffer` |
-| JWT 401 returns 500 | LOW | `onError` checks `err.status === 401` before generic 500 handler |
-| Analyst `tasks` not in `expose[]` | LOW | Added `tasks` to analyst expose list in generated configs |
-| `lastActivity` null on task receipt | LOW | `_last_activity` set in `receive()` not just `complete()`/`fail()` |
+| MCP client was a stub — no tools ever called | CRITICAL | Full MCP SDK integration: SSE, stdio, streamable-http transports |
+| LLM hallucinates tool calls instead of executing them | CRITICAL | `_TOOL_USE_ADDENDUM` injected into system prompt; forces actual tool invocation |
+| Full LLM response written to output file | CRITICAL | `_extract_final_output()` strips thinking; `---FINAL OUTPUT---` marker separates reasoning from deliverable |
+| WebSocket broadcasts full file content to all clients | CRITICAL | WS hub filters events by per-agent `expose[]`; strips `content`/`output` when not exposed |
+| WebSocket has no authentication | HIGH | JWT required as `?token=` query param on `/ws` |
+| Webhook only accepts JSON, no file uploads | HIGH | Multipart form-data support; multiple files of any type accepted |
+| Webhook input not validatable | HIGH | `webhook_input_schema` on webhook trigger; required fields validated before dispatch |
+| Shell `apt install` fails — non-root container | HIGH | Dockerfile adds passwordless sudoers; `shell.level: root` uses `sudo -n` prefix |
+| `file_received` downstream agent has no structured context | MEDIUM | `sourceAgentId`, `filename`, `filePath` in context; `{{input.filename}}` works in templates |
+| RAG indexes `output_{task_id}.md` scratch files | MEDIUM | `EXCLUDED_PATTERNS = ("output_",)` added to RAG manager |
+| MCP only supported SSE and stdio | MEDIUM | `streamable-http` transport added (recommended for production) |
+| Shell level/allowlist not configurable in UI | LOW | Shell tab shows level selector and allowlist textarea |
+
+### E2E Bug Fixes (v4 → v5)
+
+| Bug | Severity | Fix |
+|---|---|---|
+| `apps/agent-runtime` had stale v3 code while template had v4 fixes | CRITICAL | Synced all agent runtime files: MCP client, agent loop, shell, task receiver, main, RAG |
+| Agent loop didn't pass MCP tools to LLM gateway | CRITICAL | Agent loop now gathers all MCP tools + shell tool and passes to `chat(tools=...)` |
+| Agent output included full thinking/reasoning | CRITICAL | `_extract_final_output()` strips `---FINAL OUTPUT---` preamble; only deliverable returned |
+| WebSocket exposed full task output and file content | HIGH | Orchestrator strips `content`/`output` from WS broadcasts; sends 200-char previews only |
+| Shell executor had no sudo support for root level | HIGH | Dockerfile adds `sudo` + passwordless sudoers; executor uses `sudo -n` when not root |
+| RAG had no self-learning capability | MEDIUM | `self_learning` config; stores successful query-answer pairs in `rag-learned.md` |
+| No `mcp.json` support for standard MCP config format | MEDIUM | Config loader merges `mcp.json` (Claude Desktop format) with agent YAML configs |
+| Shell endpoint not gated by expose config | MEDIUM | Added `shell` to expose options; proxy enforces 403 if not exposed |
+| Config schema missing shell level/allowed_commands | MEDIUM | `AgentConfigSchema` now includes full shell config with level + allowed_commands |
+| MCP transport enum missing streamable-http | LOW | Schema updated to include `streamable-http` and `http` transports |
+| Duplicate bug fix entries in README | LOW | Removed duplicate v2→v3 table |
 
 ---
 
