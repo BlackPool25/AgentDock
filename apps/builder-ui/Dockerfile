@@ -7,6 +7,7 @@ COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/mcp-registry/package.json ./packages/mcp-registry/
 COPY apps/builder-api/package.json ./apps/builder-api/
 COPY apps/builder-ui/package.json ./apps/builder-ui/
+COPY apps/runtime-console/package.json ./apps/runtime-console/
 
 RUN bun install --frozen-lockfile
 

@@ -50,6 +50,13 @@ export function generateCompose(design: SystemDesign): string {
     restart: "unless-stopped",
   };
 
+  services["console"] = {
+    build: { context: "./console" },
+    ports: ["${CONSOLE_PORT:-5173}:80"],
+    networks: ["agentdock-net"],
+    restart: "unless-stopped",
+  };
+
   services["redis"] = {
     image: "redis:7-alpine",
     healthcheck: {

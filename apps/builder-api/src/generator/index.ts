@@ -154,6 +154,18 @@ export async function generateProject(design: SystemDesign, generationId: string
       archive.file(agentDockerfile, { name: `${prefix}/agent-runtime/Dockerfile` });
     }
 
+    // Console UI (Vite + React dashboard)
+    const consoleDir = join(APPS_DIR, "apps/runtime-console");
+    if (existsSync(consoleDir)) {
+      archive.directory(consoleDir, `${prefix}/console`, (entry) => {
+        const name = entry.name || "";
+        if (name.includes("node_modules") || name.includes("dist") || name.endsWith(".zip")) {
+          return false;
+        }
+        return entry;
+      });
+    }
+
     archive.finalize();
   });
 }

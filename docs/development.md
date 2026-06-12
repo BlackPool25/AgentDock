@@ -39,6 +39,7 @@ agentdock/
 ├── apps/
 │   ├── builder-api/           # Bun + Hono REST API for managing and generating pipelines
 │   ├── builder-ui/            # React + Vite canvas web interface for visual design
+│   ├── runtime-console/       # React + Vite console dashboard for running & monitoring generated systems
 │   ├── orchestrator/          # Bun/Hono server managing tasks & WebSocket logging
 │   ├── llm-gateway/           # BullMQ + Redis job processor load balancing inference
 │   └── agent-runtime/         # Python + FastAPI agent container (memory, RAG, and tools)

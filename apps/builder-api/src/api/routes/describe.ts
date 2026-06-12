@@ -249,7 +249,7 @@ function getMCPSummaryPrompt(description: string): string {
   const descLower = description.toLowerCase();
   // Keywords that suggest specific MCP categories
   const relevant = MCP_REGISTRY.filter(mcp => {
-    const text = (mcp.name + " " + mcp.description + " " + (mcp.tags || []).join(" ")).toLowerCase();
+    const text = (mcp.name + " " + mcp.description + " " + (mcp.audiences || []).join(" ")).toLowerCase();
     // Always include core communication/search MCPs
     if (["brave-search", "web-fetch", "filesystem", "memory-kg", "sequential-thinking"].includes(mcp.id)) return true;
     // Include if description mentions related keywords

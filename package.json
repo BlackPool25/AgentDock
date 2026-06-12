@@ -5,6 +5,7 @@
   "workspaces": [
     "apps/builder-api",
     "apps/builder-ui",
+    "apps/runtime-console",
     "packages/*"
   ],
   "scripts": {

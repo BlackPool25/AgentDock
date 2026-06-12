@@ -4,6 +4,10 @@
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A5%201.1-orange)](https://bun.sh/)
 [![Docker](https://img.shields.io/badge/Docker-Required-blue)](https://www.docker.com/)
 
+<p align="center">
+  <img src="docs/images/agentdock_banner.png" alt="AgentDock - Open Source AI Framework" width="100%">
+</p>
+
 **AgentDock** is an open-source visual pipeline generator and runtime for complex multi-agent workflows. It allows you to describe any multi-agent system in plain English, generates a visual agent graph, configures each agent with specific system prompts, temperatures, and tools, and exports a self-contained, standalone Docker Compose project that runs independently.
 
 ---
