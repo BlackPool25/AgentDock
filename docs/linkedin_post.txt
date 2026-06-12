@@ -10,17 +10,12 @@ What if you could visually drag and drop your agents, connect them together, and
 
 I built AgentDock to solve this.
 
-AgentDock is an open-source visual pipeline builder and containerized runtime for complex multi-agent workflows. 
+AgentDock is a visual design-to-code platform for multi-agent systems. It splits the workflow into two independent parts: a visual Builder UI to design and verify systems, and a self-contained containerized Runtime to execute them.
 
 THE WORKFLOW:
-1. DESIGN: Describe your system in plain English or layout agent nodes visually on a web-based canvas. Configure system prompts, temperatures, and tools directly.
+1. DESIGN (Builder UI): Layout agent nodes visually on a drag-and-drop canvas, or describe your system in plain English to auto-generate the workflow. Configure system prompts, temperatures, and tools directly.
 2. VERIFY: The backend runs programmatic and LLM-based verification loops to validate configurations, automatically repairing broken triggers or inputs.
-3. EXPORT: Hit export, and AgentDock packages everything into a self-contained ZIP file with standard Dockerfiles and readable YAML configs—no proprietary lock-in.
-
-To run the exported system, you just unzip the folder and run:
-docker compose up -d
-
-This command spins up the entire backend stack including the orchestrator, LLM gateway, Redis queue, persistent memory volumes, and agents.
+3. EXPORT & DEPLOY: Export the system into a self-contained ZIP file with standard Dockerfiles and readable YAML configs—no proprietary lock-in. Unzip it on any machine and run "docker compose up -d" to spin up the orchestrator, LLM gateway, Redis queue, persistent memory volumes, and agents.
 
 It also automatically builds and serves a dedicated RUNTIME CONSOLE on port 5173. The console is fully dynamic—it queries the active workflow topology to build a live node graph, letting you trace agent execution statuses, read/download file handoffs, and stream stdout/stderr container logs in real-time over WebSockets.
 
