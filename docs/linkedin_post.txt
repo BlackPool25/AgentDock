@@ -1,10 +1,10 @@
 Setting up a multi-agent AI system that actually works in a production environment is a massive engineering headache.
 
 Usually, you have to spend weeks dealing with:
-👉 Writing custom API routers and schema mapping for agent-to-agent communication
-👉 Setting up message queues, Redis layers, and database volumes to manage state
-👉 Handling file-based handoffs, race conditions, and vector search index synchronization
-👉 Manually writing Docker Compose configurations and mounting files for each service
+- Writing custom API routers and schema mapping for agent-to-agent communication
+- Setting up message queues, Redis layers, and database volumes to manage state
+- Handling file-based handoffs, race conditions, and vector search index synchronization
+- Manually writing Docker Compose configurations and mounting files for each service
 
 What if you could visually drag and drop your agents, connect them together, and run the entire stack in one click?
 
@@ -13,9 +13,9 @@ I built AgentDock to solve this.
 AgentDock is an open-source visual pipeline builder and containerized runtime for complex multi-agent workflows. 
 
 THE WORKFLOW:
-1️⃣ DESIGN: Describe your system in plain English or layout agent nodes visually on a web-based canvas. Configure system prompts, temperatures, and tools directly.
-2️⃣ VERIFY: The backend runs programmatic and LLM-based verification loops to validate configurations, automatically repairing broken triggers or inputs.
-3️⃣ EXPORT: Hit export, and AgentDock packages everything into a self-contained ZIP file with standard Dockerfiles and readable YAML configs—no proprietary lock-in.
+1. DESIGN: Describe your system in plain English or layout agent nodes visually on a web-based canvas. Configure system prompts, temperatures, and tools directly.
+2. VERIFY: The backend runs programmatic and LLM-based verification loops to validate configurations, automatically repairing broken triggers or inputs.
+3. EXPORT: Hit export, and AgentDock packages everything into a self-contained ZIP file with standard Dockerfiles and readable YAML configs—no proprietary lock-in.
 
 To run the exported system, you just unzip the folder and run:
 docker compose up -d
@@ -25,10 +25,10 @@ This command spins up the entire backend stack including the orchestrator, LLM g
 It also automatically builds and serves a dedicated RUNTIME CONSOLE on port 5173. The console is fully dynamic—it queries the active workflow topology to build a live node graph, letting you trace agent execution statuses, read/download file handoffs, and stream stdout/stderr container logs in real-time over WebSockets.
 
 UNDER THE HOOD, THE STACK BUNDLES:
-🚀 52 pre-built Model Context Protocol (MCP) integrations (including Postgres, Gmail, Notion, Slack, and web search)
-🧠 A self-learning memory loop using ChromaDB that saves successful agent interactions back to persistent volume storage
-💻 First-class support for running local LLMs (like Llama 3 or Qwen) out-of-the-box via Ollama, or external APIs like OpenAI, Gemini, and Anthropic
-🛠️ A clean, modern tech stack built with Bun, TypeScript, Vite, Tailwind CSS v4, and FastAPI/Python
+- 52 pre-built Model Context Protocol (MCP) integrations (including Postgres, Gmail, Notion, Slack, and web search)
+- A self-learning memory loop using ChromaDB that saves successful agent interactions back to persistent volume storage
+- First-class support for running local LLMs (like Llama 3 or Qwen) out-of-the-box via Ollama, or external APIs like OpenAI, Gemini, and Anthropic
+- A clean, modern tech stack built with Bun, TypeScript, Vite, Tailwind CSS v4, and FastAPI/Python
 
 The project is fully open source. Let me know what you think if you try it out.
 
