@@ -75,6 +75,10 @@
         "typescript": "^5.4.5",
       },
     },
+    "packages/mcp-registry": {
+      "name": "@agentdock/mcp-registry",
+      "version": "1.0.0",
+    },
     "packages/shared-types": {
       "name": "@agentdock/shared-types",
       "version": "0.2.0",
@@ -92,6 +96,8 @@
     "@agentdock/builder-ui": ["@agentdock/builder-ui@workspace:apps/builder-ui"],
 
     "@agentdock/config-schema": ["@agentdock/config-schema@workspace:packages/config-schema"],
+
+    "@agentdock/mcp-registry": ["@agentdock/mcp-registry@workspace:packages/mcp-registry"],
 
     "@agentdock/shared-types": ["@agentdock/shared-types@workspace:packages/shared-types"],
 

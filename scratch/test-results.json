@@ -1,0 +1,29 @@
+[
+  {
+    "label": "SIMPLE — personal quiz bot",
+    "systemId": "L8sVGRjVOP8I",
+    "success": false,
+    "error": {
+      "error": "Agent generation failed",
+      "detail": "Error: JSON parsing failed: JSON Parse error: Expected ':' before value in object property definition"
+    }
+  },
+  {
+    "label": "MEDIUM — JEE adaptive tutor",
+    "systemId": "nmrbzgAWoUV-",
+    "success": false,
+    "error": {
+      "error": "Agent generation failed",
+      "detail": "Error: JSON parsing failed: JSON Parse error: Unterminated string"
+    }
+  },
+  {
+    "label": "COMPLEX — WhatsApp classroom with MCPs",
+    "systemId": "Cf4cJ669IYJB",
+    "success": false,
+    "error": {
+      "error": "Intent analysis failed",
+      "detail": "Error: Could not find JSON block in LLM response"
+    }
+  }
+]

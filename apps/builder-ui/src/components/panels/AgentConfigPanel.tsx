@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useCanvasStore } from "@/stores/canvas.store.js";
 import { cn } from "@/lib/utils.js";
 import type { AgentDesign, AgentAction } from "@agentdock/config-schema";
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { systemsApi } from "@/api/systems.api.js";
 
 const TABS = ["General", "LLM", "Memory", "RAG", "Triggers", "Shell", "MCPs", "Tools", "Actions", "Seed", "Input", "Expose"] as const;
 type Tab = (typeof TABS)[number];
@@ -12,7 +13,7 @@ const EXPOSE_OPTIONS = ["logs", "chat", "memory", "status", "tasks"] as const;
 
 const TOOL_CALL_WARNING_TEMP = 0.5;
 const RECOMMENDED_MODELS: Record<string, string[]> = {
-  ollama: ["qwen2.5:7b", "qwen2.5:14b", "qwen2.5-coder:7b", "llama3.1:8b"],
+  ollama: ["qwen3:8b", "llama3.1:8b", "qwen2.5:7b", "qwen2.5:14b", "qwen2.5-coder:7b"],
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
   anthropic: ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"],
   gemini: ["gemini-1.5-pro", "gemini-1.5-flash"],
@@ -61,9 +62,31 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
   const [tab, setTab] = useState<Tab>("General");
   const node = useCanvasStore((s) => s.nodes.find((n) => n.id === nodeId));
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
+  const [ollamaModels, setOllamaModels] = useState<string[]>(RECOMMENDED_MODELS.ollama);
+  const [isCustomModel, setIsCustomModel] = useState(false);
 
-  if (!node) return null;
-  const data = node.data as AgentDesign;
+  useEffect(() => {
+    let active = true;
+    systemsApi.getOllamaModels()
+      .then((res) => {
+        if (active && res.models && res.models.length > 0) {
+          setOllamaModels(res.models);
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const data = node?.data as AgentDesign | undefined;
+
+  useEffect(() => {
+    if (!data) return;
+    const list = data.llm.provider === "ollama" ? ollamaModels : RECOMMENDED_MODELS[data.llm.provider] || [];
+    const isRecommended = list.includes(data.llm.model);
+    setIsCustomModel(!isRecommended && data.llm.model.trim() !== "");
+  }, [nodeId, data?.llm.provider, data?.llm.model, ollamaModels]);
+
+  if (!node || !data) return null;
 
   const update = (patch: Partial<AgentDesign>) => updateNodeData(nodeId, patch);
 
@@ -128,22 +151,49 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
               </select>
             </Field>
             <Field label="Model">
-              <input className="input font-mono" value={data.llm.model} onChange={(e) => update({ llm: { ...data.llm, model: e.target.value } })} />
-              {RECOMMENDED_MODELS[data.llm.provider] && (
-                <div className="mt-1">
-                  <p className="text-[10px] text-muted-foreground mb-1">Recommended:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {RECOMMENDED_MODELS[data.llm.provider].map((m) => (
-                      <button
-                        key={m}
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 transition-colors"
-                        onClick={() => update({ llm: { ...data.llm, model: m } })}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
+              {isCustomModel ? (
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    className="input font-mono flex-1"
+                    placeholder="Enter custom model name"
+                    value={data.llm.model}
+                    onChange={(e) => update({ llm: { ...data.llm, model: e.target.value } })}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomModel(false);
+                      const list = data.llm.provider === "ollama" ? ollamaModels : RECOMMENDED_MODELS[data.llm.provider] || [];
+                      if (list.length > 0) {
+                        update({ llm: { ...data.llm, model: list[0] } });
+                      }
+                    }}
+                    className="text-xs text-primary hover:underline px-2.5 py-1.5 shrink-0 bg-muted/40 rounded border border-border"
+                  >
+                    Select List
+                  </button>
                 </div>
+              ) : (
+                <select
+                  className="input font-mono"
+                  value={data.llm.model}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "custom") {
+                      setIsCustomModel(true);
+                      update({ llm: { ...data.llm, model: "" } });
+                    } else {
+                      update({ llm: { ...data.llm, model: val } });
+                    }
+                  }}
+                >
+                  {(data.llm.provider === "ollama" ? ollamaModels : RECOMMENDED_MODELS[data.llm.provider] || []).map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                  <option value="custom" className="text-primary font-semibold">Custom...</option>
+                </select>
               )}
             </Field>
             <Field label={`Temperature (${data.llm.temperature.toFixed(1)})`}>

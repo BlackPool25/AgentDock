@@ -2,6 +2,7 @@ import ky from "ky";
 
 export const api = ky.create({
   prefixUrl: "/api",
+  timeout: false,
   hooks: {
     beforeRequest: [
       (req) => {

@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package.json bun.lockb* ./
 RUN bun install
 
-COPY llm-gateway/src/ ./src/
+COPY src/ ./src/
 
 ENV NODE_ENV=production
 EXPOSE 5000

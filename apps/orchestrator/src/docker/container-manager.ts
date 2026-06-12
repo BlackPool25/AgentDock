@@ -1,4 +1,3 @@
-import type { AgentConfig } from "@agentdock/config-schema";
 import { docker } from "./client.js";
 import { networkName } from "./network-manager.js";
 import { env } from "../config/env.js";
@@ -9,7 +8,7 @@ export function containerName(systemId: string, agentId: string): string {
 }
 
 export async function spawnAgent(
-  agentConfig: AgentConfig,
+  agentConfig: any,
   systemId: string,
   peerAgents: Array<{ id: string; url: string }> = []
 ): Promise<string> {

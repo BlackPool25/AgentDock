@@ -1,17 +1,22 @@
-FROM oven/bun:1.1-alpine AS base
+FROM oven/bun:latest AS base
 WORKDIR /app
 
-# Install dependencies
-COPY package.json bun.lockb* ./
+# Copy manifests for all workspace packages
+COPY package.json bun.lock* ./
 COPY packages/config-schema/package.json ./packages/config-schema/
 COPY packages/shared-types/package.json ./packages/shared-types/
+COPY packages/mcp-registry/package.json ./packages/mcp-registry/
 COPY apps/builder-api/package.json ./apps/builder-api/
 COPY apps/builder-ui/package.json ./apps/builder-ui/
+
 RUN bun install --frozen-lockfile
 
 # Copy source
 COPY packages/ ./packages/
 COPY apps/builder-api/ ./apps/builder-api/
+COPY apps/orchestrator/ ./apps/orchestrator/
+COPY apps/llm-gateway/ ./apps/llm-gateway/
+COPY apps/agent-runtime/ ./apps/agent-runtime/
 
 WORKDIR /app/apps/builder-api
 

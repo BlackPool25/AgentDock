@@ -1,6 +1,6 @@
 {
-  "name": "@agentdock/orchestrator",
-  "version": "0.1.0",
+  "name": "agentdock-orchestrator",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "bun run --hot src/index.ts",
@@ -8,8 +8,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@agentdock/config-schema": "workspace:*",
-    "@agentdock/shared-types": "workspace:*",
     "hono": "^4.4.0",
     "@hono/zod-validator": "^0.3.0",
     "dockerode": "^4.0.2",

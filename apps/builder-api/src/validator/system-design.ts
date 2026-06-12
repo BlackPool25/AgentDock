@@ -25,6 +25,12 @@ export function canvasToSystemDesign(
       };
     });
 
+  // Build a map from node UUID → agentId for edge resolution
+  const nodeUuidToAgentId = new Map<string, string>();
+  canvas.nodes.filter(n => n.type === "agent").forEach(n => {
+    nodeUuidToAgentId.set(n.id, (n.data as any).id ?? n.id);
+  });
+
   const connections: ConnectionDesign[] = canvas.edges.map((e) => {
     const edgeData = e.data as {
       trigger?: ConnectionDesign["trigger"];
@@ -35,8 +41,9 @@ export function canvasToSystemDesign(
 
     return {
       id: e.id,
-      from: e.source,
-      to: e.target,
+      // Resolve node UUID → agentId; fall back to the raw value if not found
+      from: nodeUuidToAgentId.get(e.source) ?? e.source,
+      to: nodeUuidToAgentId.get(e.target) ?? e.target,
       label: edgeData?.label || undefined,
       description: edgeData?.description || undefined,
       dataMapping: edgeData?.dataMapping ?? [],

@@ -12,6 +12,7 @@ import { createSystemRoutes } from "./api/routes/system.js";
 import { createWebhookRoutes } from "./api/routes/webhooks.js";
 import { startTriggers, handleTaskCompletion, handleFileWritten } from "./trigger/manager.js";
 import { getAgentStatus } from "./docker/agent-manager.js";
+import { storeApiKey } from "./auth/jwt.js";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "change-me";
 const PORT = parseInt(process.env.ORCHESTRATOR_PORT ?? "4000");
@@ -20,13 +21,9 @@ const SYSTEM_ID = process.env.SYSTEM_ID ?? "unknown";
 // ── Load config ───────────────────────────────────────────────────────────────
 const config = loadConfig();
 
-// ── Build expose map: agentId → Set<expose option> ───────────────────────────
-function buildExposeMap(): Map<string, Set<string>> {
-  const map = new Map<string, Set<string>>();
-  for (const [agentId, agentConfig] of config.agents) {
-    map.set(agentId, new Set(agentConfig.expose));
-  }
-  return map;
+// Seed webhook API keys — each agentId is its own key for simple webhook triggers
+for (const agentId of config.agents.keys()) {
+  storeApiKey(agentId, agentId, ["*"], `${agentId}-default-key`);
 }
 
 // ── Start triggers ────────────────────────────────────────────────────────────
@@ -144,8 +141,7 @@ app.get(
           const secret = new TextEncoder().encode(JWT_SECRET);
           await jwtVerify(token, secret);
           authenticated = true;
-          const exposeMap = buildExposeMap();
-          wsHub.add(clientId, ws as unknown as { send: (d: string) => void; readyState: number }, exposeMap);
+          wsHub.add(clientId, ws as unknown as { send: (d: string) => void; readyState: number });
           ws.send(JSON.stringify({ type: "connected", clientId, systemId: SYSTEM_ID }));
           logger.info({ clientId }, "WS client authenticated");
         } catch {

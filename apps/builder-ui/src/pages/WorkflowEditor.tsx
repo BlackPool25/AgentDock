@@ -7,6 +7,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { Canvas } from "@/components/canvas/Canvas.js";
 import { AgentConfigPanel } from "@/components/panels/AgentConfigPanel.js";
 import { TriggerPanel } from "@/components/panels/TriggerPanel.js";
+import { DescribeBar } from "@/components/DescribeBar.js";
 import { useCanvasStore } from "@/stores/canvas.store.js";
 import { useSystemStore } from "@/stores/system.store.js";
 import { systemsApi } from "@/api/systems.api.js";
@@ -62,11 +63,53 @@ function validatePipeline(nodes: any[], edges: any[]): ValidationIssue[] {
 export function WorkflowEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { setNodes, setEdges, nodes, edges, selectedNodeId, selectedEdgeId, addAgentNode } = useCanvasStore();
+  const { setNodes, setEdges, nodes, edges, selectedNodeId, selectedEdgeId, addAgentNode, isDirty, setDirty } = useCanvasStore();
   const { current, setCurrent, saveStatus, setSaveStatus } = useSystemStore();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const generatingRef = useRef(false);
   const [showValidation, setShowValidation] = useState(false);
+  const [isDescribing, setIsDescribing] = useState(false);
+  // Stable refs so triggerSave never needs nodes/edges in its dep array
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  useEffect(() => { nodesRef.current = nodes; edgesRef.current = edges; }, [nodes, edges]);
+
+  const handleDescribe = async (description: string, provider?: string, model?: string) => {
+    if (!id || isDescribing) return;
+    setIsDescribing(true);
+    try {
+      const result = await systemsApi.describe(id, { description, provider, model });
+      const canvas = result.canvasState as CanvasState;
+      setNodes(canvas.nodes.map((n: any) => ({ ...n, type: n.type ?? "agent", data: n.data as AgentDesign })) as any);
+      setEdges(canvas.edges.map((e: any) => ({ ...e, type: "trigger", data: e.data })) as any);
+      setDirty(true);
+      toast.success(`Generated ${result.agentCount}-agent pipeline`);
+      if (result.intent?.needsUserState) {
+        toast.info("User state tracking enabled — agents will maintain learner profiles");
+      }
+    } catch {
+      toast.error("Intent analysis failed - LLM API key not found in .env or timeout");
+    } finally {
+      setIsDescribing(false);
+    }
+  };
+
+  const handlePatch = async (change: string) => {
+    if (!id || isDescribing) return;
+    setIsDescribing(true);
+    try {
+      const result = await systemsApi.patch(id, change);
+      const canvas = result.canvasState as CanvasState;
+      setNodes(canvas.nodes.map((n: any) => ({ ...n, type: n.type ?? "agent", data: n.data as AgentDesign })) as any);
+      setEdges(canvas.edges.map((e: any) => ({ ...e, type: "trigger", data: e.data })) as any);
+      setDirty(true);
+      toast.success(`Patched ${result.affectedAgentId} — ${result.patch.field}`);
+    } catch {
+      toast.error("Patch failed");
+    } finally {
+      setIsDescribing(false);
+    }
+  };
 
   const { data: system } = useQuery({
     queryKey: ["system", id],
@@ -74,10 +117,17 @@ export function WorkflowEditor() {
     enabled: !!id,
   });
 
+  const lastSystemIdRef = useRef<string | null>(null);
+
   // Load canvas from DB on mount
   useEffect(() => {
     if (!system) return;
     setCurrent(system);
+    
+    // Only load canvas state if we haven't loaded this system yet!
+    if (lastSystemIdRef.current === system.id) return;
+    lastSystemIdRef.current = system.id;
+
     const canvas = system.canvasState;
     setNodes(canvas.nodes.map((n) => ({
       ...n,
@@ -94,30 +144,36 @@ export function WorkflowEditor() {
   const saveMutation = useMutation({
     mutationFn: (canvas: CanvasState) =>
       systemsApi.update(id!, { canvasState: canvas }),
-    onSuccess: () => setSaveStatus("saved"),
+    onSuccess: () => {
+      setSaveStatus("saved");
+      setDirty(false);
+    },
     onError: () => { setSaveStatus("error"); toast.error("Save failed"); },
   });
+  const saveMutationRef = useRef(saveMutation);
+  useEffect(() => { saveMutationRef.current = saveMutation; });
 
-  // Debounced auto-save
+  // Debounced auto-save — all refs, no reactive deps, no loop
   const triggerSave = useCallback(() => {
     setSaveStatus("unsaved");
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       setSaveStatus("saving");
       const canvas: CanvasState = {
-        nodes: nodes.map((n) => ({ id: n.id, type: n.type ?? "agent", position: n.position, data: n.data as Record<string, unknown> })),
-        edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, data: e.data as Record<string, unknown> })),
+        nodes: nodesRef.current.map((n) => ({ id: n.id, type: n.type ?? "agent", position: n.position, data: n.data as Record<string, unknown> })),
+        edges: edgesRef.current.map((e) => ({ id: e.id, source: e.source, target: e.target, data: e.data as Record<string, unknown> })),
       };
-      saveMutation.mutate(canvas);
+      saveMutationRef.current.mutate(canvas);
     }, 2000);
-  }, [nodes, edges, setSaveStatus, saveMutation]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Watch canvas changes for auto-save
+  // Watch dirty changes for auto-save — only re-run when isDirty flips to true
+  const prevDirtyRef = useRef(false);
   useEffect(() => {
     if (!system) return;
-    triggerSave();
-    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [nodes, edges]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (isDirty && !prevDirtyRef.current) triggerSave();
+    prevDirtyRef.current = isDirty;
+  });
 
   const handleGenerate = async () => {
     if (generatingRef.current) return;
@@ -203,8 +259,14 @@ export function WorkflowEditor() {
         </button>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left sidebar — agent palette */}
+      <DescribeBar
+        onDescribe={handleDescribe}
+        onPatch={handlePatch}
+        hasNodes={nodes.length > 0}
+        isLoading={isDescribing}
+      />
+
+      <div className="flex flex-1 overflow-hidden">        {/* Left sidebar — agent palette */}
         <div className="w-48 border-r border-border bg-card p-3 shrink-0">
           <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wide">Palette</p>
           <div

@@ -25,7 +25,9 @@ export const systemsApi = {
     api.get(`systems/${id}/generations`).json<GenerationRecord[]>(),
 
   generate: async (id: string): Promise<void> => {
-    const res = await api.post(`systems/${id}/generate`);
+    const res = await api.post(`systems/${id}/generate`, {
+      headers: { "Cache-Control": "no-store" },
+    });
     const blob = await res.blob();
     const disposition = res.headers.get("Content-Disposition") ?? "";
     const match = disposition.match(/filename="([^"]+)"/);
@@ -40,4 +42,21 @@ export const systemsApi = {
 
   login: (email: string, password: string) =>
     api.post("auth/login", { json: { email, password } }).json<{ token: string; expiresIn: number }>(),
+
+  describe: (id: string, body: { description: string; context?: Record<string, string>; provider?: string; model?: string }) =>
+    api.post(`systems/${id}/describe`, { json: body }).json<{
+      canvasState: { nodes: unknown[]; edges: unknown[] };
+      intent: { problem: string; needsUserState: boolean; multiUser: boolean };
+      agentCount: number;
+    }>(),
+
+  patch: (id: string, change: string) =>
+    api.post(`systems/${id}/patch`, { json: { change } }).json<{
+      patch: { agentId: string; field: string; value: string };
+      canvasState: { nodes: unknown[]; edges: unknown[] };
+      affectedAgentId: string;
+    }>(),
+
+  getOllamaModels: () =>
+    api.get("ollama/models").json<{ models: string[] }>(),
 };

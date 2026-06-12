@@ -42,7 +42,7 @@ generateRoutes.post("/:id/generate", async (c) => {
 
     // Stream zip as download
     const projectName = row.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-    const filename = `${projectName}-system-v${row.version}.zip`;
+    const filename = `${projectName}-system-v${row.version}-${genId.slice(0, 6)}.zip`;
 
     c.header("Content-Type", "application/zip");
     c.header("Content-Disposition", `attachment; filename="${filename}"`);

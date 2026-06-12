@@ -3,6 +3,7 @@ from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 from pathlib import Path
 import hashlib
+import re
 from datetime import datetime, timezone
 import structlog
 from typing import Optional, Any
@@ -187,14 +188,58 @@ class RAGManager:
             return 0
 
     def _chunk(self, text: str) -> list[str]:
+        """Split text into chunks respecting markdown structure.
+
+        Strategy:
+        1. Split on markdown headers (##, ###) to keep sections intact.
+        2. If a section exceeds chunk_size, fall back to paragraph splitting.
+        3. If still too large, fall back to sentence splitting.
+        This avoids cutting mid-sentence or mid-list which degrades vector quality.
+        """
         size = self.config.chunk_size
-        overlap = self.config.chunk_overlap
-        chunks = []
-        start = 0
-        while start < len(text):
-            end = start + size
-            chunks.append(text[start:end])
-            start += size - overlap
+        chunks: list[str] = []
+
+        # Split on level-2+ headers, keeping the header with its content
+        sections = re.split(r"(?=\n#{1,3} )", text)
+
+        for section in sections:
+            section = section.strip()
+            if not section:
+                continue
+            if len(section) <= size:
+                chunks.append(section)
+            else:
+                # Section too large — split on blank lines (paragraphs)
+                paragraphs = re.split(r"\n{2,}", section)
+                current = ""
+                for para in paragraphs:
+                    para = para.strip()
+                    if not para:
+                        continue
+                    if len(current) + len(para) + 2 <= size:
+                        current = (current + "\n\n" + para).strip()
+                    else:
+                        if current:
+                            chunks.append(current)
+                        # Paragraph itself too large — split on sentences
+                        if len(para) > size:
+                            sentences = re.split(r"(?<=[.!?])\s+", para)
+                            current = ""
+                            for sent in sentences:
+                                if len(current) + len(sent) + 1 <= size:
+                                    current = (current + " " + sent).strip()
+                                else:
+                                    if current:
+                                        chunks.append(current)
+                                    current = sent
+                            if current:
+                                chunks.append(current)
+                            current = ""
+                        else:
+                            current = para
+                if current:
+                    chunks.append(current)
+
         return [c for c in chunks if c.strip()]
 
     def _should_index(self, file_path: Path) -> bool:

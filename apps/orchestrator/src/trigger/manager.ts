@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import type { WorkflowConfig } from "@agentdock/config-schema";
+import type { WorkflowConfig } from "../config/loader.js";
 import { wsHub } from "../api/websocket/hub.js";
 import { logger } from "../logger.js";
 
@@ -66,6 +66,31 @@ function setNested(obj: any, path: string, value: any): void {
   const lastKey = keys.pop()!;
   const target = keys.reduce((o, key) => (o[key] = o[key] || {}), obj);
   target[lastKey] = value;
+}
+
+export function startTriggers(workflow: WorkflowConfig): void {
+  if (!workflow?.connections?.length) {
+    logger.info("No workflow connections — trigger manager idle");
+    return;
+  }
+
+  // Find schedule triggers and set up cron jobs
+  const scheduleConns = workflow.connections?.filter(
+    (c: any) => c.trigger?.type === "schedule"
+  ) ?? [];
+
+  for (const conn of scheduleConns) {
+    const cron = (conn.trigger as any).cron as string | undefined;
+    if (!cron) continue;
+    logger.info({ from: conn.from, to: conn.to, cron }, "schedule.trigger.registered");
+    // Cron scheduling is handled by the agent-runtime scheduler.
+    // The orchestrator registers the intent; actual firing comes via /internal/events.
+  }
+
+  logger.info(
+    { connections: workflow.connections.length, schedules: scheduleConns.length },
+    "Triggers initialized"
+  );
 }
 
 export async function handleTaskCompletion(

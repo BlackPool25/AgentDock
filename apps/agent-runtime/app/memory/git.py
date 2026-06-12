@@ -10,6 +10,7 @@ log = structlog.get_logger()
 class GitManager:
     def __init__(self, repo_path: Path) -> None:
         self.repo_path = repo_path
+        self._lock = asyncio.Lock()  # Serialize all git operations to prevent index lock (exit 128)
 
     def init(self) -> None:
         import subprocess
@@ -24,8 +25,9 @@ class GitManager:
     async def commit(self, filename: str | None = None, message: str | None = None) -> None:
         ts = datetime.now(timezone.utc).isoformat()
         msg = message or f"Memory update: {filename or 'bulk'} [{ts}]"
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._do_commit, msg)
+        async with self._lock:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._do_commit, msg)
 
     def _do_commit(self, message: str) -> None:
         try:

@@ -157,20 +157,36 @@ class MCPClientManager:
         self._sessions[cfg.name] = session
 
     async def get_all_tools(self) -> list[dict[str, Any]]:
-        """Return all tool definitions from all connected MCP servers in OpenAI tool format."""
+        """Return all tool definitions: MCP servers + AgentDock builtin tools."""
+        from ..tools.builtin import BUILTIN_TOOLS
         tools: list[dict[str, Any]] = []
+        # Builtin tools first (always available, no config needed)
+        for bt in BUILTIN_TOOLS:
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": bt["name"],
+                    "description": bt["description"],
+                    "parameters": bt["inputSchema"],
+                },
+            })
         for session in self._sessions.values():
             tools.extend(session.get_tools_openai())
         return tools
 
     def get_tool_server(self, tool_name: str) -> Optional[_MCPSession]:
-        """Find which server owns a given tool name."""
+        """Find which MCP server owns a given tool name."""
         for session in self._sessions.values():
-            if any(t.function["name"] == tool_name for t in session.get_tools_openai()):
+            if any(t["function"]["name"] == tool_name for t in session.get_tools_openai()):
                 return session
         return None
 
     async def call_tool(self, tool_name: str, args: dict[str, Any]) -> str:
+        # Check builtin tools first
+        from ..tools.builtin import call_builtin_tool, BUILTIN_TOOLS
+        if any(bt["name"] == tool_name for bt in BUILTIN_TOOLS):
+            log.info("builtin_tool_call", tool=tool_name)
+            return await call_builtin_tool(tool_name, args)
         session = self.get_tool_server(tool_name)
         if not session:
             raise ValueError(f"No connected MCP server found for tool: {tool_name}")

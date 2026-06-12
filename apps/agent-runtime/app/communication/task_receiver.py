@@ -134,6 +134,16 @@ class TaskReceiver:
                 system_prompt = self._render_template(action.prompt_template, payload)
             loop = AgentLoop(self.llm, self.mcp, self.shell, self.config, self.rag)
             output = await loop.run(payload, system_prompt)
+
+            # Guard: if the model returned nothing, retry once with a stripped-down prompt
+            if not output or not output.strip():
+                log.warning("empty_output_retry", task_id=task_id, action=action.name if action else None)
+                bare_prompt = f"Complete this task and write your full response:\n\n{payload.instruction}"
+                output = await loop.run(payload, bare_prompt)
+
+            if not output or not output.strip():
+                raise ValueError("Agent produced empty output after retry")
+
             await self.complete(task_id, output)
         except Exception as e:
             log.error("agent_loop_failed", task_id=task_id, error=str(e))
@@ -153,6 +163,17 @@ class TaskReceiver:
         result = result.replace("{{input.filePath}}", str(payload.context.get("filePath", "")))
         # Remove any remaining unresolved placeholders
         result = re.sub(r"\{\{input\.[^}]+\}\}", "", result)
+
+        # Replace profile file references with existence-guarded instructions.
+        # If the profile file doesn't exist yet, tell the agent to skip reading it.
+        def _guard_profile_ref(match: re.Match) -> str:
+            path_str = match.group(1)
+            full_path = Path(f"/memory/{path_str}")
+            if full_path.exists():
+                return match.group(0)  # keep original reference
+            return f"(no profile file found at {path_str} — skip reading it and proceed with defaults)"
+
+        result = re.sub(r"profiles?/([^\s,\.\"\']+\.md)", _guard_profile_ref, result)
         return result.strip()
 
     async def complete(self, task_id: str, output: str) -> None:

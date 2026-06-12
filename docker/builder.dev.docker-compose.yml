@@ -1,34 +1,51 @@
 services:
   builder-api:
-    image: oven/bun:1.1-alpine
-    working_dir: /app/apps/builder-api
-    command: bun run --hot src/index.ts
+    image: oven/bun:latest
+    working_dir: /app
+    # Install deps then run — handles workspace symlinks correctly
+    command: sh -c "bun install && bun run --hot apps/builder-api/src/index.ts"
     ports:
       - "${BUILDER_API_PORT:-3001}:3001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ..:/app
-      - /app/node_modules
+      - builder-node-modules:/app/node_modules
+      - builder-data:/app/data
+    env_file:
+      - ../.env
     environment:
       - PORT=3001
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-min-32-chars-long-here}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@agentdock.local}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       - DATABASE_PATH=/app/apps/builder-api/data/builder.db
       - TEMPLATE_DIR=/app/template
       - OUTPUT_DIR=/app/apps/builder-api/data/generated
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3001/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   builder-ui:
-    image: oven/bun:1.1-alpine
-    working_dir: /app/apps/builder-ui
-    command: bun run dev --host 0.0.0.0
+    image: oven/bun:latest
+    working_dir: /app
+    command: sh -c "bun install && bun run --cwd apps/builder-ui dev --host 0.0.0.0 --port 3000"
     ports:
       - "${BUILDER_UI_PORT:-3000}:3000"
     volumes:
       - ..:/app
-      - /app/node_modules
+      - builder-node-modules:/app/node_modules
+    env_file:
+      - ../.env
     environment:
-      - VITE_API_URL=http://localhost:3001
+      # Browser-accessible URL — must use the host-mapped port, not the internal Docker hostname
+      - VITE_API_URL=http://localhost:${BUILDER_API_PORT:-3001}
     depends_on:
-      - builder-api
+      builder-api:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  builder-node-modules:
+  builder-data:

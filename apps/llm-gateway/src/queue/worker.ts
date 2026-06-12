@@ -2,7 +2,7 @@ import { Worker, type Job } from "bullmq";
 import { redis } from "./producer.js";
 import { registry } from "../providers/registry.js";
 import { logger } from "../logger.js";
-import type { LLMJob, LLMJobResult, LLMJobError } from "@agentdock/shared-types";
+import type { LLMJob, LLMJobResult, LLMJobError } from "../types.js";
 
 export function startWorker(): Worker {
   const worker = new Worker<LLMJob>(

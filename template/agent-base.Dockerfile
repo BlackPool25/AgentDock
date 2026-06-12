@@ -23,22 +23,25 @@ ENV PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
 
-# Copy Python project files
-COPY agent-runtime/pyproject.toml ./
-COPY agent-runtime/app ./app
-# uv.lock is optional at build time — generated on first sync
-RUN uv sync --no-dev 2>/dev/null || uv sync
+# Copy dependency manifest first — uv sync is cached unless dependencies change
+COPY pyproject.toml ./
+RUN uv pip install --system fastapi "uvicorn[standard]" httpx pyyaml pydantic gitpython "apscheduler>=4.0.0a5" structlog watchfiles python-multipart mcp
+RUN uv pip install --system "onnxruntime>=1.14.0"
+RUN uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
+RUN uv pip install --system "sentence-transformers>=3.0.0" "chromadb>=0.5.0"
 
-# Create required directories
-RUN mkdir -p /memory /storage/received /workspace
+# Copy application code last — changes here don't invalidate the uv sync cache
+COPY app ./app
 
-# Git config for memory commits
-RUN git config --global user.email "agent@agentdock" && \
-    git config --global user.name "AgentDock"
+# Create required directories and initialize git repo for memory persistence
+RUN mkdir -p /memory /storage/received /workspace && \
+    git init /memory && \
+    git -C /memory config user.email "agent@agentdock" && \
+    git -C /memory config user.name "AgentDock"
 
 HEALTHCHECK --interval=5s --timeout=3s --retries=10 \
   CMD curl -f http://localhost:8080/health || exit 1
 
 EXPOSE 8080
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

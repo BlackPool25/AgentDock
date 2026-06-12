@@ -10,8 +10,16 @@ import { generateReadme } from "./readme-gen.js";
 import { extractPdfText } from "./pdf-extract.js";
 import { logger } from "../logger.js";
 
+const APPS_DIR = resolve(process.env.APPS_DIR ?? join(import.meta.dir, "../../../.."));
 const TEMPLATE_DIR = resolve(process.env.TEMPLATE_DIR ?? join(import.meta.dir, "../../../../template"));
 const OUTPUT_DIR = resolve(process.env.OUTPUT_DIR ?? "./data/generated");
+
+// Runtime source directories — apps/ is the single source of truth
+const RUNTIME_DIRS = {
+  orchestrator: join(APPS_DIR, "orchestrator"),
+  "llm-gateway": join(APPS_DIR, "llm-gateway"),
+  "agent-runtime": join(APPS_DIR, "agent-runtime"),
+};
 
 export async function generateProject(design: SystemDesign, generationId: string): Promise<string> {
   mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -79,18 +87,68 @@ export async function generateProject(design: SystemDesign, generationId: string
       }
     }
 
-    // ── Template source (copied verbatim) ──────────────────────────────────────
-    const templateDirs = ["orchestrator", "llm-gateway", "agent-runtime"];
-    for (const dir of templateDirs) {
-      const dirPath = join(TEMPLATE_DIR, dir);
-      if (existsSync(dirPath)) {
-        archive.directory(dirPath, `${prefix}/${dir}`);
+    // ── Runtime source (apps/ is the single source of truth) ───────────────────
+    // Only include files needed by the generated runtime (excludes builder-only files)
+    const runtimeFiles: Array<[string, string]> = [
+      // Orchestrator
+      [join(APPS_DIR, "orchestrator/package.json"), `${prefix}/orchestrator/package.json`],
+      [join(APPS_DIR, "orchestrator/tsconfig.json"), `${prefix}/orchestrator/tsconfig.json`],
+      [join(TEMPLATE_DIR, "orchestrator/Dockerfile"), `${prefix}/orchestrator/Dockerfile`],
+      [join(APPS_DIR, "orchestrator/src/index.ts"), `${prefix}/orchestrator/src/index.ts`],
+      [join(APPS_DIR, "orchestrator/src/logger.ts"), `${prefix}/orchestrator/src/logger.ts`],
+      [join(APPS_DIR, "orchestrator/src/config/env.ts"), `${prefix}/orchestrator/src/config/env.ts`],
+      [join(APPS_DIR, "orchestrator/src/config/loader.ts"), `${prefix}/orchestrator/src/config/loader.ts`],
+      [join(APPS_DIR, "orchestrator/src/auth/jwt.ts"), `${prefix}/orchestrator/src/auth/jwt.ts`],
+      [join(APPS_DIR, "orchestrator/src/workflow/parser.ts"), `${prefix}/orchestrator/src/workflow/parser.ts`],
+      [join(APPS_DIR, "orchestrator/src/trigger/manager.ts"), `${prefix}/orchestrator/src/trigger/manager.ts`],
+      [join(APPS_DIR, "orchestrator/src/api/routes/agents.ts"), `${prefix}/orchestrator/src/api/routes/agents.ts`],
+      [join(APPS_DIR, "orchestrator/src/api/routes/system.ts"), `${prefix}/orchestrator/src/api/routes/system.ts`],
+      [join(APPS_DIR, "orchestrator/src/api/routes/webhooks.ts"), `${prefix}/orchestrator/src/api/routes/webhooks.ts`],
+      [join(APPS_DIR, "orchestrator/src/api/websocket/hub.ts"), `${prefix}/orchestrator/src/api/websocket/hub.ts`],
+      [join(APPS_DIR, "orchestrator/src/proxy/agent-proxy.ts"), `${prefix}/orchestrator/src/proxy/agent-proxy.ts`],
+      [join(APPS_DIR, "orchestrator/src/docker/agent-manager.ts"), `${prefix}/orchestrator/src/docker/agent-manager.ts`],
+      [join(APPS_DIR, "orchestrator/src/docker/container-manager.ts"), `${prefix}/orchestrator/src/docker/container-manager.ts`],
+      [join(APPS_DIR, "orchestrator/src/docker/network-manager.ts"), `${prefix}/orchestrator/src/docker/network-manager.ts`],
+      [join(APPS_DIR, "orchestrator/src/docker/client.ts"), `${prefix}/orchestrator/src/docker/client.ts`],
+      // LLM Gateway
+      [join(APPS_DIR, "llm-gateway/package.json"), `${prefix}/llm-gateway/package.json`],
+      [join(APPS_DIR, "llm-gateway/tsconfig.json"), `${prefix}/llm-gateway/tsconfig.json`],
+      [join(TEMPLATE_DIR, "llm-gateway/Dockerfile"), `${prefix}/llm-gateway/Dockerfile`],
+      [join(APPS_DIR, "llm-gateway/src/index.ts"), `${prefix}/llm-gateway/src/index.ts`],
+      [join(APPS_DIR, "llm-gateway/src/logger.ts"), `${prefix}/llm-gateway/src/logger.ts`],
+      [join(APPS_DIR, "llm-gateway/src/types.ts"), `${prefix}/llm-gateway/src/types.ts`],
+      [join(APPS_DIR, "llm-gateway/src/api/routes/chat.ts"), `${prefix}/llm-gateway/src/api/routes/chat.ts`],
+      [join(APPS_DIR, "llm-gateway/src/api/routes/health.ts"), `${prefix}/llm-gateway/src/api/routes/health.ts`],
+      [join(APPS_DIR, "llm-gateway/src/api/routes/providers.ts"), `${prefix}/llm-gateway/src/api/routes/providers.ts`],
+      [join(APPS_DIR, "llm-gateway/src/api/routes/queue.ts"), `${prefix}/llm-gateway/src/api/routes/queue.ts`],
+      [join(APPS_DIR, "llm-gateway/src/loadbalancer/ollama-lb.ts"), `${prefix}/llm-gateway/src/loadbalancer/ollama-lb.ts`],
+      [join(APPS_DIR, "llm-gateway/src/providers/base.ts"), `${prefix}/llm-gateway/src/providers/base.ts`],
+      [join(APPS_DIR, "llm-gateway/src/providers/openai.ts"), `${prefix}/llm-gateway/src/providers/openai.ts`],
+      [join(APPS_DIR, "llm-gateway/src/providers/anthropic.ts"), `${prefix}/llm-gateway/src/providers/anthropic.ts`],
+      [join(APPS_DIR, "llm-gateway/src/providers/gemini.ts"), `${prefix}/llm-gateway/src/providers/gemini.ts`],
+      [join(APPS_DIR, "llm-gateway/src/providers/groq.ts"), `${prefix}/llm-gateway/src/providers/groq.ts`],
+      [join(APPS_DIR, "llm-gateway/src/providers/ollama.ts"), `${prefix}/llm-gateway/src/providers/ollama.ts`],
+      [join(APPS_DIR, "llm-gateway/src/providers/registry.ts"), `${prefix}/llm-gateway/src/providers/registry.ts`],
+      [join(APPS_DIR, "llm-gateway/src/queue/producer.ts"), `${prefix}/llm-gateway/src/queue/producer.ts`],
+      [join(APPS_DIR, "llm-gateway/src/queue/worker.ts"), `${prefix}/llm-gateway/src/queue/worker.ts`],
+      // Agent Runtime
+      [join(APPS_DIR, "agent-runtime/pyproject.toml"), `${prefix}/agent-runtime/pyproject.toml`],
+    ];
+    for (const [src, dest] of runtimeFiles) {
+      if (existsSync(src)) {
+        archive.file(src, { name: dest });
       } else {
-        logger.warn({ dir: dirPath }, "Template directory not found — skipping");
+        logger.warn({ src }, "Runtime file not found — skipping");
       }
     }
 
-    // agent-base.Dockerfile → agent-runtime/Dockerfile in generated project
+    // Copy agent-runtime/app/ directory (entire Python app)
+    const agentAppDir = join(APPS_DIR, "agent-runtime/app");
+    if (existsSync(agentAppDir)) {
+      archive.directory(agentAppDir, `${prefix}/agent-runtime/app`);
+    }
+
+    // Agent Dockerfile from template
     const agentDockerfile = join(TEMPLATE_DIR, "agent-base.Dockerfile");
     if (existsSync(agentDockerfile)) {
       archive.file(agentDockerfile, { name: `${prefix}/agent-runtime/Dockerfile` });

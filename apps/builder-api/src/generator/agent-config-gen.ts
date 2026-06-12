@@ -30,13 +30,21 @@ export function generateAgentConfig(agent: AgentDesign): string {
       level: agent.shell.level ?? "restricted",
       allowed_commands: agent.shell.allowed_commands ?? [],
     },
-    mcps: agent.mcps.map((mcp) => ({
-      name: mcp.name,
-      transport: mcp.transport,
-      url: mcp.url,
-      command: mcp.command,
-      env: mcp.env || {},
-    })),
+    mcps: agent.mcps
+      .filter((mcp) => {
+        // Drop stdio MCPs with no command — they will crash the MCP client on startup
+        if (mcp.transport === "stdio" && (!mcp.command || mcp.command.trim() === "")) return false;
+        // Drop SSE/HTTP MCPs with no URL
+        if (mcp.transport !== "stdio" && (!mcp.url || mcp.url.trim() === "")) return false;
+        return true;
+      })
+      .map((mcp) => ({
+        name: mcp.name,
+        transport: mcp.transport,
+        url: mcp.url,
+        command: mcp.command,
+        env: mcp.env || {},
+      })),
     tools: {
       python_packages: agent.tools.pythonPackages,
       system_packages: agent.tools.systemPackages,

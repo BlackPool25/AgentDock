@@ -1,5 +1,4 @@
-import type { AgentEvent } from "@agentdock/shared-types";
-import { logger } from "../logger.js";
+import { logger } from "../../logger.js";
 
 type WSClient = { send: (data: string) => void; readyState: number };
 
@@ -16,7 +15,7 @@ class WebSocketHub {
     logger.info({ clientId: id, total: this.clients.size }, "WS client disconnected");
   }
 
-  broadcast(event: AgentEvent): void {
+  broadcast(event: Record<string, unknown>): void {
     const payload = JSON.stringify(event);
     for (const [id, ws] of this.clients) {
       if (ws.readyState === 1) {

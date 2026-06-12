@@ -1,29 +1,33 @@
 import { Hono } from "hono";
 import { proxyToAgent } from "../../proxy/agent-proxy.js";
 import { loadAgentConfig, saveAgentConfig } from "../../workflow/parser.js";
-import { AgentConfigSchema } from "@agentdock/config-schema";
 
-export const agentRoutes = new Hono();
+export function createAgentRoutes(config: any) {
+  const app = new Hono();
 
-// Proxy all agent sub-paths
-agentRoutes.all("/:agentId/:rest{.*}", proxyToAgent);
+  app.all("/:agentId/:rest{.*}", async (c) => {
+    const agentId = c.req.param("agentId");
+    const rest = c.req.param("rest");
+    const agentConfig = config.agents.get(agentId);
+    if (!agentConfig) {
+      return c.json({ error: `Agent '${agentId}' not found`, code: "NOT_FOUND" }, 404);
+    }
+    return proxyToAgent(c, agentId, rest, agentConfig);
+  });
 
-// Config management (JWT-protected at router level)
-agentRoutes.get("/:agentId/config", (c) => {
-  try {
-    return c.json(loadAgentConfig(c.req.param("agentId")));
-  } catch {
-    return c.json({ error: "Agent not found", code: "NOT_FOUND" }, 404);
-  }
-});
+  app.get("/:agentId/config", (c) => {
+    try {
+      return c.json(loadAgentConfig(c.req.param("agentId")));
+    } catch {
+      return c.json({ error: "Agent not found", code: "NOT_FOUND" }, 404);
+    }
+  });
 
-agentRoutes.put("/:agentId/config", async (c) => {
-  const body = await c.req.json();
-  const parsed = AgentConfigSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: parsed.error.message, code: "VALIDATION_ERROR" }, 400);
-  }
-  saveAgentConfig(parsed.data);
-  // TODO: trigger hot-reload
-  return c.json(parsed.data);
-});
+  app.put("/:agentId/config", async (c) => {
+    const body = await c.req.json();
+    saveAgentConfig(body);
+    return c.json(body);
+  });
+
+  return app;
+}

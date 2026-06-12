@@ -5,6 +5,8 @@ import { logger } from "./logger.js";
 import { authRoutes } from "./api/routes/auth.js";
 import { systemRoutes } from "./api/routes/systems.js";
 import { generateRoutes } from "./api/routes/generate.js";
+import { patchRoutes } from "./api/routes/patch.js";
+import { describeRoutes } from "./api/routes/describe.js";
 import { db } from "./db/client.js";
 import { sql } from "drizzle-orm";
 
@@ -50,6 +52,7 @@ app.post("/api/auth/login", (c) => authRoutes.fetch(new Request(new URL("/login"
 // Register JWT middleware before the protected routes.
 app.use("/api/auth/me", jwtMiddleware);
 app.use("/api/systems/*", jwtMiddleware);
+app.use("/api/ollama/*", jwtMiddleware);
 
 app.get("/api/auth/me", async (c) => {
   const payload = c.get("jwtPayload") as { sub: string; email: string } | undefined;
@@ -57,8 +60,28 @@ app.get("/api/auth/me", async (c) => {
   return c.json({ sub: payload.sub, email: payload.email });
 });
 
+app.get("/api/ollama/models", async (c) => {
+  const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
+  try {
+    const res = await fetch(`${ollamaUrl}/api/tags`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch from Ollama: ${res.statusText}`);
+    }
+    const data = (await res.json()) as { models?: Array<{ name: string }> };
+    const models = data.models?.map((m) => m.name) || [];
+    return c.json({ models });
+  } catch (err: any) {
+    logger.warn({ err: err.message }, "Could not fetch local Ollama models, falling back to defaults");
+    return c.json({
+      models: ["qwen3:8b", "llama3.1:8b", "qwen2.5:7b", "qwen2.5:14b", "qwen2.5-coder:7b"],
+    });
+  }
+});
+
 app.route("/api/systems", systemRoutes);
 app.route("/api/systems", generateRoutes);
+app.route("/api/systems", patchRoutes);
+app.route("/api/systems", describeRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.onError((err, c) => {

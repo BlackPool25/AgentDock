@@ -28,6 +28,9 @@ interface CanvasStore {
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
 
+  isDirty: boolean;
+  setDirty: (dirty: boolean) => void;
+
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
   onNodesChange: (changes: NodeChange[]) => void;
@@ -51,7 +54,7 @@ function defaultAgent(id: string): AgentNodeData {
     name: "New Agent",
     description: "",
     position: { x: 0, y: 0 },
-    llm: { provider: "ollama", model: "llama3.1:8b", temperature: 0.7, maxTokens: 4096, systemPrompt: "" },
+    llm: { provider: "ollama", model: "qwen3:8b", temperature: 0.7, maxTokens: 4096, systemPrompt: "" },
     memory: { gitAutoCommit: true, readableBy: [] },
     rag: {
       enabled: false,
@@ -81,15 +84,26 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   edges: [],
   selectedNodeId: null,
   selectedEdgeId: null,
+  isDirty: false,
 
+  setDirty: (isDirty) => set({ isDirty }),
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
 
-  onNodesChange: (changes) =>
-    set({ nodes: applyNodeChanges(changes, get().nodes) }),
+  onNodesChange: (changes) => {
+    const newNodes = applyNodeChanges(changes, get().nodes);
+    const hasMeaningfulChange = changes.some(
+      (c) => c.type === "remove" || c.type === "add" ||
+             (c.type === "position" && !(c as any).dragging)
+    );
+    set(hasMeaningfulChange ? { nodes: newNodes, isDirty: true } : { nodes: newNodes });
+  },
 
-  onEdgesChange: (changes) =>
-    set({ edges: applyEdgeChanges(changes, get().edges) }),
+  onEdgesChange: (changes) => {
+    const newEdges = applyEdgeChanges(changes, get().edges);
+    const hasMeaningfulChange = changes.some((c) => c.type !== "select");
+    set(hasMeaningfulChange ? { edges: newEdges, isDirty: true } : { edges: newEdges });
+  },
 
   onConnect: (connection) => {
     const id = `edge-${nanoid(6)}`;
@@ -109,6 +123,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       // Auto-select the new edge so TriggerPanel opens immediately
       selectedEdgeId: id,
       selectedNodeId: null,
+      isDirty: true,
     });
   },
 
@@ -120,6 +135,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       nodes: get().nodes.map((n) =>
         n.id === id ? { ...n, data: { ...n.data, ...data } } : n
       ),
+      isDirty: true,
     }),
 
   updateEdgeData: (id, data) =>
@@ -127,6 +143,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       edges: get().edges.map((e) =>
         e.id === id ? { ...e, data: { ...e.data, ...data } as TriggerEdgeDataRecord } : e
       ),
+      isDirty: true,
     }),
 
   addAgentNode: (position) => {
@@ -138,6 +155,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       position,
       data: defaultAgent(id),
     };
-    set({ nodes: [...get().nodes, node] });
+    set({ nodes: [...get().nodes, node], isDirty: true });
   },
 }));

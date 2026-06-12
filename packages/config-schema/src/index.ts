@@ -14,6 +14,13 @@ export const MCPConfigSchema = z.object({
   url: z.string().optional(),
   command: z.string().optional(),
   env: z.record(z.string()).default({}),
+  // EdTech metadata — used by the builder UI palette and auto-suggest
+  tier: z.number().int().min(1).max(9).optional(),
+  status: z.enum(["default", "optional", "advanced"]).optional(),
+  audiences: z.array(z.enum([
+    "primary", "middle", "secondary", "senior",
+    "undergraduate", "postgraduate", "competitive",
+  ])).optional(),
 });
 
 export const WebhookInputFieldSchema = z.object({
