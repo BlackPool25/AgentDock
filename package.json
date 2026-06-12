@@ -3,9 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "workspaces": [
-    "apps/builder-api",
-    "apps/builder-ui",
-    "apps/runtime-console",
+    "apps/*",
     "packages/*"
   ],
   "scripts": {

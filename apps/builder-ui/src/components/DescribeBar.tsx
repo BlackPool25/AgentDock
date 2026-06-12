@@ -15,7 +15,6 @@ const RECOMMENDED_MODELS: Record<string, string[]> = {
   ollama: ["qwen3:8b", "llama3.1:8b", "qwen2.5:7b", "qwen2.5:14b", "qwen2.5-coder:7b"],
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
   anthropic: ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"],
-  gemini: ["gemini-1.5-pro", "gemini-1.5-flash"],
 };
 
 export function DescribeBar({ onDescribe, onPatch, hasNodes, isLoading }: Props) {
@@ -24,22 +23,40 @@ export function DescribeBar({ onDescribe, onPatch, hasNodes, isLoading }: Props)
   const [provider, setProvider] = useState<string>("ollama");
   const [model, setModel] = useState<string>("qwen3:8b");
   const [ollamaModels, setOllamaModels] = useState<string[]>(RECOMMENDED_MODELS.ollama);
+  const [geminiModels, setGeminiModels] = useState<string[]>([]);
   const [isCustomModel, setIsCustomModel] = useState(false);
 
   useEffect(() => {
     let active = true;
+
+    // Fetch active LLM config from backend (.env)
+    systemsApi.getLlmConfig()
+      .then((config) => {
+        if (active && config.provider) {
+          setProvider(config.provider);
+          if (config.model) {
+            setModel(config.model);
+          }
+        }
+      })
+      .catch(() => {});
+
     systemsApi.getOllamaModels()
       .then((res) => {
         if (active && res.models && res.models.length > 0) {
           setOllamaModels(res.models);
-          if (res.models.length > 0 && !res.models.includes(model)) {
-            setModel(res.models[0]);
-          }
         }
       })
-      .catch(() => {
-        // Graceful fallback
-      });
+      .catch(() => {});
+
+    systemsApi.getGeminiModels()
+      .then((res) => {
+        if (active && res.models && res.models.length > 0) {
+          setGeminiModels(res.models);
+        }
+      })
+      .catch(() => {});
+
     return () => {
       active = false;
     };
@@ -87,7 +104,7 @@ export function DescribeBar({ onDescribe, onPatch, hasNodes, isLoading }: Props)
               const p = e.target.value;
               setProvider(p);
               setIsCustomModel(false);
-              const models = p === "ollama" ? ollamaModels : RECOMMENDED_MODELS[p] || [];
+              const models = p === "ollama" ? ollamaModels : p === "gemini" ? geminiModels : RECOMMENDED_MODELS[p] || [];
               if (models.length > 0) {
                 setModel(models[0]);
               }
@@ -117,7 +134,7 @@ export function DescribeBar({ onDescribe, onPatch, hasNodes, isLoading }: Props)
                 type="button"
                 onClick={() => {
                   setIsCustomModel(false);
-                  const models = provider === "ollama" ? ollamaModels : RECOMMENDED_MODELS[provider] || [];
+                  const models = provider === "ollama" ? ollamaModels : provider === "gemini" ? geminiModels : RECOMMENDED_MODELS[provider] || [];
                   if (models.length > 0) setModel(models[0]);
                 }}
                 className="text-muted-foreground hover:text-primary text-[10px] ml-1.5 font-semibold transition-colors"
@@ -140,11 +157,15 @@ export function DescribeBar({ onDescribe, onPatch, hasNodes, isLoading }: Props)
               className="bg-transparent text-xs font-mono text-muted-foreground border-none outline-none cursor-pointer max-w-[130px] truncate focus:ring-0 focus:text-primary transition-colors"
               disabled={isLoading}
             >
-              {(provider === "ollama" ? ollamaModels : RECOMMENDED_MODELS[provider] || []).map((m) => (
-                <option key={m} value={m} className="bg-card text-foreground font-mono">
-                  {m}
-                </option>
-              ))}
+              {(() => {
+                const currentModels = provider === "ollama" ? ollamaModels : provider === "gemini" ? geminiModels : RECOMMENDED_MODELS[provider] || [];
+                const displayModels = model && !currentModels.includes(model) && model !== "custom" ? [model, ...currentModels] : currentModels;
+                return displayModels.map((m) => (
+                  <option key={m} value={m} className="bg-card text-foreground font-mono">
+                    {m}
+                  </option>
+                ));
+              })()}
               <option value="custom" className="bg-card text-primary font-semibold">
                 Custom...
               </option>

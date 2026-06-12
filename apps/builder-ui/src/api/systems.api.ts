@@ -59,4 +59,10 @@ export const systemsApi = {
 
   getOllamaModels: () =>
     api.get("ollama/models").json<{ models: string[] }>(),
+
+  getGeminiModels: () =>
+    api.get("gemini/models").json<{ models: string[] }>(),
+
+  getLlmConfig: () =>
+    api.get("llm/config").json<{ provider: string; model: string }>(),
 };

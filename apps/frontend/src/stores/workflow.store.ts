@@ -34,7 +34,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       source: c.from,
       target: c.to,
       type: "triggerEdge",
-      label: c.metadata?.label,
+      label: c.label,
       data: { trigger: c.trigger },
     }));
     set({ nodes, edges, currentWorkflow: workflow, isDirty: false });

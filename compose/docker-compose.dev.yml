@@ -13,13 +13,15 @@ services:
       - ../apps/orchestrator/src:/app/src
       - ../configs:/app/configs
       - orchestrator-data:/app/data
+    env_file:
+      - ../.env
     environment:
-      - SYSTEM_ID=dev
-      - JWT_SECRET=dev-secret-min-32-chars-for-testing
+      - SYSTEM_ID=${SYSTEM_ID:-dev}
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-min-32-chars-for-testing}
       - REDIS_URL=redis://redis:6379
       - LLM_GATEWAY_URL=http://llm-gateway:5000
-      - ADMIN_EMAIL=admin@agentdock.local
-      - ADMIN_PASSWORD=changeme
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@agentdock.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       - LOG_LEVEL=debug
     networks:
       - agentdock-dev
@@ -36,6 +38,8 @@ services:
     volumes:
       - ../apps/llm-gateway/src:/app/src
       - gateway-data:/app/data
+    env_file:
+      - ../.env
     environment:
       - REDIS_URL=redis://redis:6379
       - WORKER_CONCURRENCY=3
@@ -58,9 +62,11 @@ services:
       dockerfile: docker/frontend.Dockerfile
       target: dev
     ports:
-      - "3000:3000"
+      - "5173:3000"
     volumes:
       - ../apps/frontend/src:/app/src
+    env_file:
+      - ../.env
     environment:
       - VITE_ORCHESTRATOR_URL=http://localhost:4000
       - VITE_WS_URL=ws://localhost:4000/ws
@@ -71,7 +77,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes

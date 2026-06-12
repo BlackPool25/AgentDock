@@ -12,6 +12,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./configs:/app/configs
       - orchestrator-data:/app/data
+    env_file:
+      - ../.env
     environment:
       - SYSTEM_ID=${SYSTEM_ID:-dev}
       - JWT_SECRET=${JWT_SECRET}
@@ -33,6 +35,8 @@ services:
       dockerfile: docker/llm-gateway.Dockerfile
     volumes:
       - gateway-data:/app/data
+    env_file:
+      - ../.env
     environment:
       - REDIS_URL=redis://redis:6379
       - WORKER_CONCURRENCY=${LLM_WORKER_CONCURRENCY:-5}
@@ -54,7 +58,9 @@ services:
       context: ..
       dockerfile: docker/frontend.Dockerfile
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
+      - "${FRONTEND_PORT:-5173}:80"
+    env_file:
+      - ../.env
     environment:
       - VITE_ORCHESTRATOR_URL=${VITE_ORCHESTRATOR_URL:-http://localhost:4000}
       - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:4000/ws}

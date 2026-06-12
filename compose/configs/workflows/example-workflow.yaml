@@ -1,0 +1,26 @@
+workflow:
+  id: "example-workflow"
+  name: "Example Workflow"
+  version: "1.0.0"
+  description: "A two-agent pipeline: coordinator dispatches research, analyst produces a report"
+
+system:
+  id: "example-system"
+  auto_start: false
+
+agents:
+  - ref: "coordinator"
+    position: { x: 250, y: 100 }
+  - ref: "analyst"
+    position: { x: 250, y: 350 }
+
+connections:
+  - id: "coord-to-analyst"
+    from: "coordinator"
+    to: "analyst"
+    label: "dispatch research"
+    trigger:
+      type: task_completion
+      pass_output: true
+      # Bug 1 fix: only fire when coordinator completes the dispatch_research action
+      action_filter: dispatch_research

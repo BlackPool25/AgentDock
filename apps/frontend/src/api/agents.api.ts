@@ -1,5 +1,5 @@
 import { api } from "./client.js";
-import type { AgentInfo, AgentStatusResponse, MemoryFile } from "@agentdock/shared-types";
+import type { AgentStatusResponse, MemoryFile } from "@agentdock/shared-types";
 
 export const agentsApi = {
   status: (id: string) => api.get(`agents/${id}/status`).json<AgentStatusResponse>(),

@@ -7,9 +7,10 @@ COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/mcp-registry/package.json ./packages/mcp-registry/
 COPY apps/builder-api/package.json ./apps/builder-api/
 COPY apps/builder-ui/package.json ./apps/builder-ui/
-COPY apps/runtime-console/package.json ./apps/runtime-console/
-
-RUN bun install --frozen-lockfile
+COPY apps/orchestrator/package.json ./apps/orchestrator/
+COPY apps/llm-gateway/package.json ./apps/llm-gateway/
+COPY apps/frontend/package.json ./apps/frontend/
+RUN bun install
 
 COPY packages/ ./packages/
 COPY apps/builder-ui/ ./apps/builder-ui/

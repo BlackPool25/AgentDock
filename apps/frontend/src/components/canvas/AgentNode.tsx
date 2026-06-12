@@ -16,7 +16,7 @@ interface AgentNodeData {
 }
 
 export function AgentNode({ data, selected }: NodeProps) {
-  const nodeData = data as AgentNodeData;
+  const nodeData = data as unknown as AgentNodeData;
   const statuses = useWsStore((s) => s.agentStatuses);
   const status = statuses.get(nodeData.agentId) ?? "stopped";
 

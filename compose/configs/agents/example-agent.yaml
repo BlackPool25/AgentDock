@@ -1,0 +1,53 @@
+agent:
+  id: "example-agent"
+  name: "Example Agent"
+  description: "A simple example agent to get started"
+  version: "1.0.0"
+
+runtime:
+  base_image: "agentdock/agent-base:latest"
+
+llm:
+  provider: "ollama"
+  model: "qwen2.5:7b"
+  temperature: 0.2
+  max_tokens: 4096
+  system_prompt: |
+    You are a helpful assistant. Respond clearly and concisely.
+
+memory:
+  git_auto_commit: true
+  readable_by: []
+
+shell:
+  enabled: false
+
+mcps: []
+
+tools:
+  python_packages: []
+  system_packages: []
+
+# Named actions — task_receiver picks the best match for each incoming task
+actions:
+  - name: dispatch_research
+    description: Parse the incoming request and dispatch a research task
+    prompt_template: |
+      Parse this request and produce a structured research brief:
+      {{input.instruction}}
+    output_file: brief.md
+
+triggers:
+  - type: "task"
+  - type: "webhook"
+
+# Bug 6 fix: tasks added to expose list
+expose:
+  - status
+  - logs
+  - chat
+  - memory
+  - tasks
+
+ports:
+  internal: 8080

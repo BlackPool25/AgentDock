@@ -1,0 +1,3 @@
+# Agent configs go here
+# Each file: {agent-id}.yaml
+# See docs/agent-config-reference.md for the full schema

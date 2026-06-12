@@ -1,5 +1,6 @@
 import { Play, Square, Save, Plus } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
+import type { WorkflowConfig } from "@agentdock/config-schema";
 import { systemsApi } from "../../api/systems.api.js";
 import { workflowsApi } from "../../api/workflows.api.js";
 import { useWorkflowStore } from "../../stores/workflow.store.js";
@@ -23,18 +24,19 @@ export function Toolbar() {
   const saveMutation = useMutation({
     mutationFn: () => {
       if (!currentWorkflow) throw new Error("No workflow loaded");
-      const updated = {
+      const updated: WorkflowConfig = {
         ...currentWorkflow,
         agents: nodes.map((n) => ({ ref: n.id, position: n.position })),
         connections: edges.map((e) => ({
           id: e.id,
           from: e.source,
           to: e.target,
-          trigger: (e.data as { trigger?: unknown })?.trigger ?? { type: "task_completion", pass_output: true },
-          metadata: { label: e.label as string | undefined },
+          trigger: ((e.data as { trigger?: any })?.trigger ?? { type: "task_completion", pass_output: true }),
+          label: e.label as string | undefined,
+          data_mapping: (e.data as { data_mapping?: any })?.data_mapping ?? [],
         })),
       };
-      return workflowsApi.update(currentWorkflow.workflow.id, updated as never);
+      return workflowsApi.update(currentWorkflow.workflow.id, updated);
     },
     onSuccess: () => { markClean(); toast.success("Workflow saved"); },
     onError: () => toast.error("Failed to save workflow"),

@@ -50,7 +50,7 @@ Agent rules (follow all):
 `;
 
 const DescribeRequestSchema = z.object({
-  description: z.string().min(10).max(2000),
+  description: z.string().min(3).max(50000),
   // Optional extra context the user provides
   context: z.record(z.string()).optional(),
   provider: z.string().optional(),
@@ -81,12 +81,20 @@ interface PipelineIntent {
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
-describeRoutes.post("/:id/describe", zValidator("json", DescribeRequestSchema), async (c) => {
-  const { id } = c.req.param();
-  const { description, context, provider, model } = c.req.valid("json");
+describeRoutes.post(
+  "/:id/describe",
+  zValidator("json", DescribeRequestSchema, (result, c) => {
+    if (!result.success) {
+      logger.error({ err: result.error.format() }, "describe.validation_failed");
+      return c.json({ error: "Validation failed", details: result.error.format() }, 400);
+    }
+  }),
+  async (c) => {
+    const { id } = c.req.param();
+    const { description, context, provider, model } = c.req.valid("json");
 
-  const row = db.select().from(systems).where(eq(systems.id, id)).get();
-  if (!row) return c.json({ error: "System not found" }, 404);
+    const row = db.select().from(systems).where(eq(systems.id, id)).get();
+    if (!row) return c.json({ error: "System not found" }, 404);
 
   // Phase 1: extract structured intent
   let intent: PipelineIntent;

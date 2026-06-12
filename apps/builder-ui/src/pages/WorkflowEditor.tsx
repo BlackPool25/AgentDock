@@ -87,8 +87,19 @@ export function WorkflowEditor() {
       if (result.intent?.needsUserState) {
         toast.info("User state tracking enabled — agents will maintain learner profiles");
       }
-    } catch {
-      toast.error("Intent analysis failed - LLM API key not found in .env or timeout");
+    } catch (err: any) {
+      let message = "LLM API key not found in .env or timeout";
+      if (err.response) {
+        try {
+          const body = await err.response.json();
+          if (body && body.error) {
+            message = body.error;
+          }
+        } catch {}
+      } else if (err.message) {
+        message = err.message;
+      }
+      toast.error(`Intent analysis failed: ${message}`);
     } finally {
       setIsDescribing(false);
     }

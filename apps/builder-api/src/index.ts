@@ -1,3 +1,23 @@
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+
+// Load root .env if it exists and we are running locally/containerized
+const rootEnvPath = join(import.meta.dir, "../../../.env");
+if (existsSync(rootEnvPath)) {
+  const envContent = readFileSync(rootEnvPath, "utf-8");
+  for (const line of envContent.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const firstEq = trimmed.indexOf("=");
+    if (firstEq === -1) continue;
+    const key = trimmed.slice(0, firstEq).trim();
+    const val = trimmed.slice(firstEq + 1).trim().replace(/^['"]|['"]$/g, "");
+    if (!process.env[key]) {
+      process.env[key] = val;
+    }
+  }
+}
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { jwt } from "hono/jwt";
@@ -53,11 +73,50 @@ app.post("/api/auth/login", (c) => authRoutes.fetch(new Request(new URL("/login"
 app.use("/api/auth/me", jwtMiddleware);
 app.use("/api/systems/*", jwtMiddleware);
 app.use("/api/ollama/*", jwtMiddleware);
+app.use("/api/gemini/*", jwtMiddleware);
+app.use("/api/llm/*", jwtMiddleware);
 
 app.get("/api/auth/me", async (c) => {
   const payload = c.get("jwtPayload") as { sub: string; email: string } | undefined;
   if (!payload) return c.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, 401);
   return c.json({ sub: payload.sub, email: payload.email });
+});
+
+app.get("/api/llm/config", (c) => {
+  return c.json({
+    provider: process.env.LLM_PROVIDER ?? "openai",
+    model: process.env.LLM_MODEL ?? "gpt-4o-mini",
+  });
+});
+
+app.get("/api/gemini/models", async (c) => {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) {
+    return c.json({
+      models: ["gemini-3.1-flash-lite", "gemini-3.1-flash", "gemini-3.1-pro", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro"],
+    });
+  }
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch from Gemini: ${res.status} ${await res.text()}`);
+    }
+    const data = (await res.json()) as { models?: Array<{ name: string; supportedGenerationMethods?: string[] }> };
+    const models = (data.models ?? [])
+      .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
+      .map((m) => m.name.replace(/^models\//, ""))
+      .filter((name) => !name.includes("tuning") && !name.includes("embed") && !name.includes("experimental"));
+
+    if (models.length > 0) {
+      return c.json({ models });
+    }
+    throw new Error("No text generation models returned from Gemini API");
+  } catch (err: any) {
+    logger.warn({ err: err.message }, "Could not fetch Gemini models, falling back to defaults");
+    return c.json({
+      models: ["gemini-3.1-flash-lite", "gemini-3.1-flash", "gemini-3.1-pro", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro"],
+    });
+  }
 });
 
 app.get("/api/ollama/models", async (c) => {

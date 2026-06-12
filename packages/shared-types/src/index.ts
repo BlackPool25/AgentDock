@@ -94,3 +94,29 @@ export interface LLMJobResult {
 
 // ─── API Error ────────────────────────────────────────────────────────────────
 export interface ApiError { error: string; code: string }
+
+// ─── Frontend Compatibility Types ─────────────────────────────────────────────
+export interface AgentStatusResponse {
+  agentId: string;
+  status: string;
+  currentTask: string | null;
+  memoryFiles: string[];
+  lastActivity: string | null;
+  uptime: number;
+}
+
+export interface MemoryFile {
+  filename: string;
+  size?: number;
+  lastModified?: string;
+}
+
+export interface SystemInfo {
+  id: string;
+  name: string;
+  workflowId: string;
+  agentCount: number;
+  status?: string;
+}
+
+export type AgentEvent = RuntimeEvent;

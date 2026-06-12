@@ -240,6 +240,10 @@ export const WorkflowConfigSchema = z.object({
     name: z.string(),
     version: z.string().default("1.0.0"),
   }),
+  system: z.object({
+    id: z.string(),
+    auto_start: z.boolean().default(false),
+  }),
   agents: z.array(z.object({
     ref: z.string(),
     position: z.object({ x: z.number(), y: z.number() }),

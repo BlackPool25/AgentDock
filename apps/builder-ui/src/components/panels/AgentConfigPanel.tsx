@@ -16,7 +16,6 @@ const RECOMMENDED_MODELS: Record<string, string[]> = {
   ollama: ["qwen3:8b", "llama3.1:8b", "qwen2.5:7b", "qwen2.5:14b", "qwen2.5-coder:7b"],
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
   anthropic: ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"],
-  gemini: ["gemini-1.5-pro", "gemini-1.5-flash"],
   groq: ["llama-3.1-70b-versatile", "mixtral-8x7b-32768"],
 };
 
@@ -63,6 +62,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
   const node = useCanvasStore((s) => s.nodes.find((n) => n.id === nodeId));
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
   const [ollamaModels, setOllamaModels] = useState<string[]>(RECOMMENDED_MODELS.ollama);
+  const [geminiModels, setGeminiModels] = useState<string[]>([]);
   const [isCustomModel, setIsCustomModel] = useState(false);
 
   useEffect(() => {
@@ -74,6 +74,13 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
         }
       })
       .catch(() => {});
+    systemsApi.getGeminiModels()
+      .then((res) => {
+        if (active && res.models && res.models.length > 0) {
+          setGeminiModels(res.models);
+        }
+      })
+      .catch(() => {});
     return () => { active = false; };
   }, []);
 
@@ -81,10 +88,10 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
 
   useEffect(() => {
     if (!data) return;
-    const list = data.llm.provider === "ollama" ? ollamaModels : RECOMMENDED_MODELS[data.llm.provider] || [];
+    const list = data.llm.provider === "ollama" ? ollamaModels : data.llm.provider === "gemini" ? geminiModels : RECOMMENDED_MODELS[data.llm.provider] || [];
     const isRecommended = list.includes(data.llm.model);
     setIsCustomModel(!isRecommended && data.llm.model.trim() !== "");
-  }, [nodeId, data?.llm.provider, data?.llm.model, ollamaModels]);
+  }, [nodeId, data?.llm.provider, data?.llm.model, ollamaModels, geminiModels]);
 
   if (!node || !data) return null;
 
@@ -165,7 +172,7 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                     type="button"
                     onClick={() => {
                       setIsCustomModel(false);
-                      const list = data.llm.provider === "ollama" ? ollamaModels : RECOMMENDED_MODELS[data.llm.provider] || [];
+                      const list = data.llm.provider === "ollama" ? ollamaModels : data.llm.provider === "gemini" ? geminiModels : RECOMMENDED_MODELS[data.llm.provider] || [];
                       if (list.length > 0) {
                         update({ llm: { ...data.llm, model: list[0] } });
                       }
@@ -189,9 +196,13 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
                     }
                   }}
                 >
-                  {(data.llm.provider === "ollama" ? ollamaModels : RECOMMENDED_MODELS[data.llm.provider] || []).map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
+                  {(() => {
+                    const currentModels = data.llm.provider === "ollama" ? ollamaModels : data.llm.provider === "gemini" ? geminiModels : RECOMMENDED_MODELS[data.llm.provider] || [];
+                    const displayModels = data.llm.model && !currentModels.includes(data.llm.model) && data.llm.model !== "custom" ? [data.llm.model, ...currentModels] : currentModels;
+                    return displayModels.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ));
+                  })()}
                   <option value="custom" className="text-primary font-semibold">Custom...</option>
                 </select>
               )}

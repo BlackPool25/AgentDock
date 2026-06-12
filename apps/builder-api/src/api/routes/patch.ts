@@ -116,10 +116,10 @@ Rules:
 async function callLLMForPatch(prompt: string): Promise<{ agentId: string; field: string; value: string }> {
   const provider = process.env.LLM_PROVIDER ?? "openai";
   const model = process.env.LLM_MODEL ?? "gpt-4o-mini";
-  const apiKey = process.env.OPENAI_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? process.env.GROQ_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
 
   if (provider !== "ollama" && !apiKey) {
-    throw new Error("No LLM API key configured (set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY)");
+    throw new Error("No LLM API key configured (set OPENAI_API_KEY, GROQ_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY)");
   }
 
   let content: string;
@@ -140,6 +140,23 @@ async function callLLMForPatch(prompt: string): Promise<{ agentId: string; field
     if (!res.ok) throw new Error(`Ollama API error: ${res.status} ${await res.text()}`);
     const data = await res.json() as { message: { content: string } };
     content = data.message?.content ?? "";
+  } else if (provider === "gemini") {
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) throw new Error("GEMINI_API_KEY not set");
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
+        }),
+      }
+    );
+    if (!res.ok) throw new Error(`Gemini API error: ${res.status} ${await res.text()}`);
+    const data = await res.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
+    content = data.candidates[0]?.content?.parts[0]?.text ?? "";
   } else {
     const baseUrl = provider === "groq" ? "https://api.groq.com/openai/v1" : "https://api.openai.com/v1";
     const res = await fetch(`${baseUrl}/chat/completions`, {

@@ -10,23 +10,14 @@ services:
     volumes:
       - builder-data:/app/apps/builder-api/data
       - ../template:/app/template:ro
+    env_file:
+      - ../.env
     environment:
       - PORT=3001
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-min-32-chars-long-here}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@agentdock.local}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       - DATABASE_PATH=/app/apps/builder-api/data/builder.db
       - TEMPLATE_DIR=/app/template
       - OUTPUT_DIR=/app/apps/builder-api/data/generated
       - APPS_DIR=/app/apps
-      # LLM for describe/patch endpoints
-      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
-      - LLM_MODEL=${LLM_MODEL:-qwen3:8b}
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OLLAMA_URL=${OLLAMA_URL:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://localhost:3001/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
@@ -38,6 +29,8 @@ services:
     build:
       context: ..
       dockerfile: apps/builder-ui/Dockerfile
+    env_file:
+      - ../.env
     ports:
       - "${BUILDER_UI_PORT:-3000}:80"
     depends_on:
