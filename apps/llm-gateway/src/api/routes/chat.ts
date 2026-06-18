@@ -2,8 +2,13 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { registry } from "../../providers/registry.js";
 import { logger } from "../../logger.js";
+import { QueueEvents } from "bullmq";
+import { redis, llmQueue } from "../../queue/producer.js";
+import { randomUUID } from "crypto";
 
 export const chatRoutes = new Hono();
+
+const queueEvents = new QueueEvents("llm-jobs", { connection: redis as any });
 
 const SyncChatSchema = z.object({
   provider: z.string(),
@@ -21,7 +26,7 @@ const SyncChatSchema = z.object({
 
 /**
  * POST /api/chat/sync
- * Synchronous LLM call — bypasses BullMQ.
+ * Synchronous LLM call — enqueued and blocked via BullMQ to protect rate limits.
  * Used by the agentic tool loop where each round must complete before the next.
  */
 chatRoutes.post("/sync", async (c) => {
@@ -37,17 +42,37 @@ chatRoutes.post("/sync", async (c) => {
     return c.json({ error: `Provider not found: ${body.provider}` }, 404);
   }
 
+  const jobId = randomUUID();
   try {
-    const result = await provider.chatWithTools(body.messages as any, {
-      model: body.model,
-      temperature: body.temperature,
-      maxTokens: body.maxTokens,
-      tools: body.tools,
+    const job = await llmQueue.add(
+      "llm-request",
+      {
+        jobId,
+        agentId: "sync-client",
+        provider: body.provider,
+        model: body.model,
+        messages: body.messages as any,
+        temperature: body.temperature,
+        maxTokens: body.maxTokens,
+        tools: body.tools,
+        type: "sync",
+      },
+      {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 2000 },
+        jobId,
+      }
+    );
+
+    const result = await job.waitUntilFinished(queueEvents, 300_000);
+    logger.info({ provider: body.provider, model: body.model, jobId }, "sync_chat_completed");
+    return c.json({
+      content: result.content ?? result.output ?? "",
+      toolCalls: result.toolCalls ?? [],
+      usage: result.usage ?? {},
     });
-    logger.info({ provider: body.provider, model: body.model }, "sync_chat_completed");
-    return c.json({ content: result.content, toolCalls: result.toolCalls, usage: result.usage ?? {} });
   } catch (err) {
-    logger.error({ provider: body.provider, err: String(err) }, "sync_chat_failed");
+    logger.error({ provider: body.provider, jobId, err: String(err) }, "sync_chat_failed");
     return c.json({ error: String(err) }, 500);
   }
 });

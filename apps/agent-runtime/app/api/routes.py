@@ -110,6 +110,8 @@ async def get_memory_file(filename: str, request: Request) -> dict[str, Any]:
     try:
         content = await s.memory.read(filename)
         return {"filename": filename, "content": content}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -121,8 +123,11 @@ class MemoryWriteBody(BaseModel):
 @router.put("/memory/{filename:path}")
 async def write_memory_file(filename: str, body: MemoryWriteBody, request: Request) -> dict[str, Any]:
     s = get_state(request)
-    await s.memory.write(filename, body.content)
-    return {"ok": True}
+    try:
+        await s.memory.write(filename, body.content)
+        return {"ok": True}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
 @router.post("/memory/upload")
@@ -135,26 +140,33 @@ async def upload_memory_file(
     content = await file.read()
     filename = file.filename or "uploaded_file"
 
+    try:
+        safe_path = s.memory._safe_path(filename)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
     # Determine MIME type
     mime_type = file.content_type
     if not mime_type:
         mime_type, _ = mimetypes.guess_type(filename)
         mime_type = mime_type or "application/octet-stream"
 
-    # For text files, write as string; for binary, write as base64-encoded
-    if mime_type.startswith("text/") or mime_type in ("application/json", "application/xml", "application/yaml"):
-        text_content = content.decode("utf-8", errors="replace")
-        await s.memory.write(filename, text_content)
-    else:
-        # Binary files: store as base64 in a .b64 wrapper file, plus raw copy
-        raw_path = s.memory.base_path / filename
-        raw_path.parent.mkdir(parents=True, exist_ok=True)
-        raw_path.write_bytes(content)
-        # Also create a metadata entry
-        meta = {"filename": filename, "size": len(content), "mime_type": mime_type}
-        import json
-        meta_path = s.memory.base_path / f"{filename}.meta.json"
-        meta_path.write_text(json.dumps(meta))
+    try:
+        # For text files, write as string; for binary, write as base64-encoded
+        if mime_type.startswith("text/") or mime_type in ("application/json", "application/xml", "application/yaml"):
+            text_content = content.decode("utf-8", errors="replace")
+            await s.memory.write(filename, text_content)
+        else:
+            # Binary files: store as base64 in a .b64 wrapper file, plus raw copy
+            safe_path.parent.mkdir(parents=True, exist_ok=True)
+            safe_path.write_bytes(content)
+            # Also create a metadata entry
+            meta = {"filename": filename, "size": len(content), "mime_type": mime_type}
+            import json
+            meta_path = s.memory._safe_path(f"{filename}.meta.json")
+            meta_path.write_text(json.dumps(meta))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
     _capture_log("info", f"File uploaded: {filename}", filename=filename, size=len(content), mime_type=mime_type)
     return {"ok": True, "filename": filename, "size": len(content), "mime_type": mime_type}
@@ -164,17 +176,22 @@ async def upload_memory_file(
 async def get_memory_file_raw(filename: str, request: Request):
     """Download a memory file as raw binary (for images, PDFs, etc)."""
     s = get_state(request)
-    file_path = s.memory.base_path / filename
+    try:
+        file_path = s.memory._safe_path(filename)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
     mime_type, _ = mimetypes.guess_type(filename)
     media_type = mime_type or "application/octet-stream"
 
-    return StreamingResponse(
-        open(file_path, "rb"),
+    from fastapi.responses import FileResponse
+    return FileResponse(
+        path=file_path,
         media_type=media_type,
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        filename=file_path.name,
     )
 
 

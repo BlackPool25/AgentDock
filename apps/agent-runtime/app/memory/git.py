@@ -18,6 +18,8 @@ class GitManager:
         if not git_dir.exists():
             subprocess.run(["git", "init"], cwd=self.repo_path, check=True, capture_output=True)
             log.info("git_init", path=str(self.repo_path))
+        # Mark directory as safe for git to prevent dubious ownership errors on custom host mount UIDs
+        subprocess.run(["git", "config", "--global", "safe.directory", "*"], capture_output=True)
         # Always ensure git user config is set (needed in Docker named volumes)
         subprocess.run(["git", "config", "user.email", "agent@agentdock"], cwd=self.repo_path, capture_output=True)
         subprocess.run(["git", "config", "user.name", "AgentDock"], cwd=self.repo_path, capture_output=True)

@@ -87,20 +87,77 @@ class TaskReceiver:
         return self.config.actions[0]
 
     async def receive(self, payload: TaskPayload) -> str:
-        task_id = payload.taskId or str(uuid.uuid4())
+        # Sanitize task_id to prevent directory traversal
+        task_id = re.sub(r'[^a-zA-Z0-9_-]', '', payload.taskId) if payload.taskId else str(uuid.uuid4())
         payload.taskId = task_id
 
+        # Sanitize sender ID and attached filenames
+        sender_clean = Path(payload.senderId).name
         for f in payload.attachedFiles:
-            dest = Path(f"/storage/received/{payload.senderId}/{f.filename}")
+            filename_clean = Path(f.filename).name
+            dest = Path(f"/storage/received/{sender_clean}/{filename_clean}")
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(base64.b64decode(f.content))
+
+        # Check if this task is resuming a suspended upstream feedback request
+        source_task_id = payload.context.get("sourceTaskId")
+        if source_task_id:
+            source_task_id = re.sub(r'[^a-zA-Z0-9_-]', '', str(source_task_id))
+            orig_payload = self._pending.get(source_task_id)
+            if orig_payload:
+                # Re-activate suspended task record
+                for rec in self._tasks:
+                    if rec.taskId == source_task_id:
+                        rec.status = "processing"
+                        break
+                ts = datetime.now(timezone.utc).isoformat()
+                self._current_task = source_task_id
+                self._last_activity = ts
+
+                # Attach feedback history turns
+                orig_payload.feedback_history = [
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "call_feedback",
+                                "type": "function",
+                                "function": {
+                                    "name": "request_feedback",
+                                    "arguments": f'{{"target_agent_id": "{sender_clean}", "query": ""}}'
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "role": "tool",
+                        "tool_call_id": "call_feedback",
+                        "content": "[feedback_requested] Clarification request submitted."
+                    },
+                    {
+                        "role": "user",
+                        "content": payload.instruction
+                    }
+                ]
+
+                await self.memory.append(
+                    "task_queue.md",
+                    f"## Task Resume {source_task_id}\n- **Feedback From:** {sender_clean}\n- **Time:** {ts}\n- **Status:** processing\n\n{payload.instruction[:500]}",
+                )
+                await self.memory.write("state.md", f"current_task: {source_task_id}\nstatus: processing\n")
+
+                action = self._pending_action.get(source_task_id)
+                asyncio.create_task(self._run_loop(source_task_id, orig_payload, action))
+                log.info("task_resumed", task_id=source_task_id, sender=sender_clean)
+                return source_task_id
 
         ts = datetime.now(timezone.utc).isoformat()
         action = self._pick_action(payload)
 
         record = TaskRecord(
             taskId=task_id,
-            senderId=payload.senderId,
+            senderId=sender_clean,
             instruction=payload.instruction[:200],
             status="processing",
             startedAt=ts,
@@ -112,7 +169,7 @@ class TaskReceiver:
 
         await self.memory.append(
             "task_queue.md",
-            f"## Task {task_id}\n- **From:** {payload.senderId}\n- **Time:** {ts}\n- **Action:** {action.name if action else 'default'}\n- **Status:** processing\n\n{payload.instruction[:500]}",
+            f"## Task {task_id}\n- **From:** {sender_clean}\n- **Time:** {ts}\n- **Action:** {action.name if action else 'default'}\n- **Status:** processing\n\n{payload.instruction[:500]}",
         )
         await self.memory.write("state.md", f"current_task: {task_id}\nstatus: processing\naction: {action.name if action else 'none'}\n")
 
@@ -122,13 +179,13 @@ class TaskReceiver:
 
         # Run agentic loop as background task
         asyncio.create_task(self._run_loop(task_id, payload, action))
-        log.info("task_received", task_id=task_id, sender=payload.senderId, action=action.name if action else None)
+        log.info("task_received", task_id=task_id, sender=sender_clean, action=action.name if action else None)
         return task_id
 
     async def _run_loop(self, task_id: str, payload: TaskPayload, action: Any) -> None:
         """Run the agentic loop as a background task."""
         try:
-            from ..llm.agent_loop import AgentLoop
+            from ..llm.agent_loop import AgentLoop, FeedbackRequestedException
             system_prompt = (self.config.llm.system_prompt or "") if self.config else ""
             if action and action.prompt_template:
                 system_prompt = self._render_template(action.prompt_template, payload)
@@ -145,6 +202,9 @@ class TaskReceiver:
                 raise ValueError("Agent produced empty output after retry")
 
             await self.complete(task_id, output)
+        except FeedbackRequestedException as fre:
+            log.info("feedback_requested_suspend", task_id=task_id, target=fre.target_agent_id)
+            await self.suspend(task_id, fre.target_agent_id, fre.query)
         except Exception as e:
             log.error("agent_loop_failed", task_id=task_id, error=str(e))
             await self.fail(task_id, str(e))
@@ -188,6 +248,9 @@ class TaskReceiver:
                 rec.output = output[:500] if output else None
                 break
 
+        payload = self._pending.get(task_id) or next((t for t in self._tasks if t.taskId == task_id), None)
+        context = payload.context if (payload and hasattr(payload, "context")) else {}
+
         action = self._pending_action.pop(task_id, None)
         self._pending.pop(task_id, None)
 
@@ -206,6 +269,7 @@ class TaskReceiver:
             "taskId": task_id,
             "output": output,
             "actionName": action.name if action else None,
+            "context": context,
             "timestamp": ts,
         })
         log.info("task_completed", task_id=task_id, action=action.name if action else None)
@@ -231,6 +295,25 @@ class TaskReceiver:
         })
         log.error("task_failed", task_id=task_id, error=error)
 
+    async def suspend(self, task_id: str, target_agent_id: str, query: str) -> None:
+        ts = datetime.now(timezone.utc).isoformat()
+        self._last_activity = ts
+        self._current_task = None
+        for rec in self._tasks:
+            if rec.taskId == task_id:
+                rec.status = "suspended"
+                break
+        await self.memory.write("state.md", f"current_task: {task_id}\nstatus: suspended\n")
+        await self._notify_orchestrator({
+            "type": "agent:task:feedback_requested",
+            "agentId": AGENT_ID,
+            "taskId": task_id,
+            "targetAgentId": target_agent_id,
+            "instruction": query,
+            "timestamp": ts,
+        })
+        log.info("task_suspended_for_feedback", task_id=task_id, target_agent_id=target_agent_id)
+
     async def write_memory_and_notify(self, filename: str, content: str) -> None:
         """Write a named output file and notify orchestrator to fire file_received triggers."""
         await self.memory.write(filename, content)
@@ -243,8 +326,17 @@ class TaskReceiver:
         })
 
     async def _notify_orchestrator(self, event: dict[str, Any]) -> None:
-        try:
-            async with httpx.AsyncClient() as client:
-                await client.post(f"{ORCHESTRATOR_URL}/internal/events", json=event, timeout=5)
-        except Exception as e:
-            log.error("orchestrator_notify_failed", error=str(e))
+        retry_delays = [1, 2, 4, 8, 16]
+        for attempt, delay in enumerate(retry_delays + [30]):
+            try:
+                async with httpx.AsyncClient() as client:
+                    res = await client.post(f"{ORCHESTRATOR_URL}/internal/events", json=event, timeout=5)
+                    res.raise_for_status()
+                log.info("orchestrator_notified", event_type=event.get("type"), attempt=attempt)
+                return
+            except Exception as e:
+                log.warning("orchestrator_notify_retry", attempt=attempt, delay=delay, error=str(e))
+                if attempt == len(retry_delays):
+                    log.error("orchestrator_notify_failed", error=str(e))
+                    return
+                await asyncio.sleep(delay)

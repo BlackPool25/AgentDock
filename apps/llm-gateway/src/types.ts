@@ -8,7 +8,9 @@ export interface LLMJob {
   messages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string; tool_calls?: unknown[]; tool_call_id?: string }>;
   temperature?: number;
   maxTokens?: number;
-  callbackUrl: string;
+  callbackUrl?: string;
+  tools?: any[];
+  type?: "sync" | "async";
 }
 
 export interface LLMJobResult {

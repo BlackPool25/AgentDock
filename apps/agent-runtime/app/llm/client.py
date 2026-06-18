@@ -74,7 +74,7 @@ class LLMClient:
         if tools:
             payload["tools"] = tools
 
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=360.0) as client:
             res = await client.post(f"{GATEWAY_URL}/api/chat/sync", json=payload)
             res.raise_for_status()
             data = res.json()

@@ -29,7 +29,16 @@ class ShellExecutor:
         if not self.enabled:
             raise PermissionError("Shell execution is disabled for this agent")
 
-        if self.level == "restricted" and self.allowed_commands:
+        if self.level == "restricted":
+            # If allowed_commands is empty, reject everything
+            if not self.allowed_commands:
+                raise PermissionError("No commands are allowed for this restricted agent")
+
+            # Check for shell injection / multi-commands
+            forbidden_chars = [";", "&", "|", "`", "$", "\n", "\r"]
+            if any(char in command for char in forbidden_chars):
+                raise PermissionError("Shell operators or multi-commands are not allowed in restricted mode")
+
             cmd_name = command.strip().split()[0] if command.strip() else ""
             if cmd_name not in self.allowed_commands:
                 raise PermissionError(

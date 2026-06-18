@@ -6,7 +6,7 @@ export const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379"
   maxRetriesPerRequest: null,
 });
 
-export const llmQueue = new Queue<LLMJob>("llm-jobs", { connection: redis });
+export const llmQueue = new Queue<LLMJob>("llm-jobs", { connection: redis as any });
 
 export async function enqueueJob(job: LLMJob): Promise<string> {
   const added = await llmQueue.add("llm-request", job, {

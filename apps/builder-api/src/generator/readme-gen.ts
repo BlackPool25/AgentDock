@@ -65,8 +65,8 @@ export function generateReadme(design: SystemDesign): string {
     const hasWebhook = a.triggers?.some((t: { type: string }) => t.type === "webhook");
     if (hasWebhook) {
       lines.push(`\`\`\`bash`);
-      lines.push(`# Trigger via webhook (no token required)`);
-      lines.push(`curl -X POST ${base}/webhooks/${a.id} \\`);
+      lines.push(`# Trigger via webhook (no bearer token required, but requires WEBHOOK_SECRET)`);
+      lines.push(`curl -X POST "${base}/webhooks/${a.id}?secret=\$WEBHOOK_SECRET" \\`);
       lines.push(`  -H "Content-Type: application/json" \\`);
       lines.push(`  -d '{"instruction": "Start your task"}'`);
       lines.push(`\`\`\``);
@@ -168,9 +168,9 @@ echo $TOKEN
 curl ${base}/api/system/status -H "Authorization: Bearer $TOKEN"
 \`\`\`
 
-### 4. Trigger the pipeline via webhook
+### 4. Trigger the pipeline via webhook (requires WEBHOOK_SECRET)
 \`\`\`bash
-curl -X POST ${base}/webhooks/${design.agents[0]?.id ?? "agent-id"} \\
+curl -X POST "${base}/webhooks/${design.agents[0]?.id ?? "agent-id"}?secret=\$WEBHOOK_SECRET" \\
   -H "Content-Type: application/json" \\
   -d '{"instruction": "Run your task"}'
 \`\`\`

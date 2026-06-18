@@ -23,6 +23,11 @@ export async function proxyToAgent(
   agentPath: string,
   agentConfig: AgentConfig
 ): Promise<Response> {
+  // Prevent directory traversal or encoded path injection bypasses
+  if (agentPath.includes("..") || agentPath.toLowerCase().includes("%2e")) {
+    return c.json({ error: "Invalid path segments", code: "BAD_REQUEST" }, 400);
+  }
+
   // Determine required expose permission
   const topSegment = agentPath.split("/")[0] as string;
   const required = ENDPOINT_EXPOSE_MAP[topSegment];

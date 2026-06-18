@@ -10,7 +10,7 @@ import { wsHub } from "./api/websocket/hub.js";
 import { createAgentRoutes } from "./api/routes/agents.js";
 import { createSystemRoutes } from "./api/routes/system.js";
 import { createWebhookRoutes } from "./api/routes/webhooks.js";
-import { startTriggers, handleTaskCompletion, handleFileWritten } from "./trigger/manager.js";
+import { startTriggers, handleTaskCompletion, handleFileWritten, handleFeedbackRequest } from "./trigger/manager.js";
 import { getAgentStatus } from "./docker/agent-manager.js";
 import { storeApiKey } from "./auth/jwt.js";
 
@@ -20,11 +20,6 @@ const SYSTEM_ID = process.env.SYSTEM_ID ?? "unknown";
 
 // ── Load config ───────────────────────────────────────────────────────────────
 const config = loadConfig();
-
-// Seed webhook API keys — each agentId is its own key for simple webhook triggers
-for (const agentId of config.agents.keys()) {
-  storeApiKey(agentId, agentId, ["*"], `${agentId}-default-key`);
-}
 
 // ── Start triggers ────────────────────────────────────────────────────────────
 startTriggers(config.workflow);
@@ -63,6 +58,17 @@ app.post("/internal/events", async (c) => {
       event.output as string,
       config.workflow,
       event.actionName as string | undefined,
+      event.context as Record<string, unknown> | undefined,
+    );
+  }
+
+  if (event.type === "agent:task:feedback_requested" && event.targetAgentId && event.instruction) {
+    await handleFeedbackRequest(
+      event.agentId,
+      event.targetAgentId as string,
+      event.taskId!,
+      event.instruction as string,
+      config.workflow,
     );
   }
 

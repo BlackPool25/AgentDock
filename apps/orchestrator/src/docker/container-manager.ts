@@ -1,3 +1,4 @@
+import Dockerode from "dockerode";
 import { docker } from "./client.js";
 import { networkName } from "./network-manager.js";
 import { env } from "../config/env.js";

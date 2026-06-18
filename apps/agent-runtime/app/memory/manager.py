@@ -30,14 +30,21 @@ class MemoryManager:
         if self.auto_commit:
             self.git.init()
 
+    def _safe_path(self, filename: str) -> Path:
+        base_resolved = self.base_path.resolve()
+        target_resolved = (base_resolved / filename).resolve()
+        if not target_resolved.is_relative_to(base_resolved):
+            raise PermissionError(f"Access denied: path {filename} is outside target boundaries")
+        return target_resolved
+
     async def read(self, filename: str) -> str:
-        path = self.base_path / filename
+        path = self._safe_path(filename)
         if not path.exists():
             raise FileNotFoundError(f"Memory file not found: {filename}")
         return path.read_text()
 
     async def write(self, filename: str, content: str, commit_message: Optional[str] = None) -> None:
-        path = self.base_path / filename
+        path = self._safe_path(filename)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
         if self.auto_commit:
@@ -46,7 +53,7 @@ class MemoryManager:
             asyncio.create_task(self.rag.index_file(path))
 
     async def append(self, filename: str, content: str) -> None:
-        path = self.base_path / filename
+        path = self._safe_path(filename)
         path.parent.mkdir(parents=True, exist_ok=True)
         existing = path.read_text() if path.exists() else ""
         separator = "\n\n" if existing and not existing.endswith("\n\n") else ""

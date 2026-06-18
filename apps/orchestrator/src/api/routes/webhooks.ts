@@ -3,24 +3,34 @@ import { validateApiKey } from "../../auth/jwt.js";
 import { logger } from "../../logger.js";
 import { loadAgentConfig } from "../../workflow/parser.js";
 
-export function createWebhookRoutes(_config: any) {
+export function createWebhookRoutes(config: any) {
   const app = new Hono();
 
-  app.post("/:apiKey", async (c) => {
-    const apiKey = c.req.param("apiKey");
-    const keyData = validateApiKey(apiKey);
-    if (!keyData) {
-      return c.json({ error: "Invalid API key", code: "UNAUTHORIZED" }, 401);
+  app.post("/:agentId", async (c) => {
+    const agentId = c.req.param("agentId");
+    const secret = c.req.query("secret") || c.req.header("x-webhook-secret");
+    const configuredSecret = process.env.WEBHOOK_SECRET || process.env.JWT_SECRET;
+
+    if (!configuredSecret) {
+      logger.error("No WEBHOOK_SECRET or JWT_SECRET configured. Webhooks are disabled for security.");
+      return c.json({ error: "Webhooks misconfigured", code: "MISCONFIGURED" }, 500);
     }
 
-    const agentId = keyData.agentId;
-    const body = await c.req.json();
+    if (!secret || secret !== configuredSecret) {
+      return c.json({ error: "Invalid webhook secret", code: "UNAUTHORIZED" }, 401);
+    }
+
+    const agentConfig = config.agents.get(agentId);
+    if (!agentConfig) {
+      return c.json({ error: `Agent '${agentId}' not found`, code: "NOT_FOUND" }, 404);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
     const target = `http://${agentId}:8080/tasks`;
 
     let actionName: string | undefined;
     try {
-      const config = loadAgentConfig(agentId);
-      const trigger = config?.agent?.triggers?.find((t: any) => t.type === "webhook");
+      const trigger = agentConfig.triggers?.find((t: any) => t.type === "webhook");
       if (trigger?.actionName) actionName = trigger.actionName;
     } catch (err) {
       logger.warn({ agentId, err }, "Could not load agent config for webhook context");

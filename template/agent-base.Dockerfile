@@ -9,13 +9,8 @@ RUN apt-get update && apt-get install -y \
     build-essential jq unzip ca-certificates sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure passwordless sudo for all users (needed when shell.level=root)
-RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
-    echo 'agentdock ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-
 # Create non-root user for restricted shell agents
-RUN useradd -m -s /bin/bash agentdock && \
-    usermod -aG sudo agentdock
+RUN useradd -m -s /bin/bash agentdock
 
 # Install uv (Python package manager)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -37,7 +32,12 @@ COPY app ./app
 RUN mkdir -p /memory /storage/received /workspace && \
     git init /memory && \
     git -C /memory config user.email "agent@agentdock" && \
-    git -C /memory config user.name "AgentDock"
+    git -C /memory config user.name "AgentDock" && \
+    chown -R agentdock:agentdock /app /memory /storage /workspace && \
+    chmod -R 777 /memory /storage /workspace
+
+# Set default execution user to non-root agentdock
+USER agentdock
 
 HEALTHCHECK --interval=5s --timeout=3s --retries=10 \
   CMD curl -f http://localhost:8080/health || exit 1

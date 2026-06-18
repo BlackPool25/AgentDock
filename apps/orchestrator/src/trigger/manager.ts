@@ -99,8 +99,19 @@ export async function handleTaskCompletion(
   output: string,
   workflow: WorkflowConfig,
   actionName?: string,
+  context?: Record<string, any>,
 ): Promise<void> {
   wsHub.broadcast({ type: "agent:task:completed", agentId: fromAgentId, systemId: SYSTEM_ID, taskId, output, timestamp: new Date().toISOString() } as any);
+
+  // If this task completion is responding to a feedback request, route directly back to the requesting agent
+  if (context?.feedbackRequestor) {
+    const toAgent = context.feedbackRequestor;
+    const originalTaskId = context.sourceTaskId;
+    logger.info({ fromAgentId, toAgent, originalTaskId }, "feedback.response.routing");
+    const instruction = `Here is the requested feedback/clarification from ${fromAgentId} regarding your task ${originalTaskId}:\n\n${output}`;
+    await sendTask(toAgent, instruction, { sourceTaskId: originalTaskId });
+    return;
+  }
 
   for (const conn of workflow.connections) {
     if (conn.from !== fromAgentId || conn.trigger.type !== "task_completion") continue;
@@ -149,4 +160,20 @@ function matchesPattern(filename: string, pattern: string): boolean {
   if (pattern === "*") return true;
   const regex = new RegExp("^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
   return regex.test(filename);
+}
+
+export async function handleFeedbackRequest(
+  fromAgentId: string,
+  targetAgentId: string,
+  sourceTaskId: string,
+  instruction: string,
+  workflow: WorkflowConfig
+): Promise<void> {
+  logger.info({ fromAgentId, targetAgentId, sourceTaskId }, "feedback_requested.trigger");
+  // Route feedback request as a new task back to targetAgentId
+  await sendTask(
+    targetAgentId,
+    `Feedback requested by ${fromAgentId} regarding task ${sourceTaskId}:\n\n${instruction}`,
+    { sourceTaskId, feedbackRequestor: fromAgentId }
+  );
 }

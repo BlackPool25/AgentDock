@@ -1,6 +1,23 @@
 import yaml from "js-yaml";
 import type { AgentDesign } from "@agentdock/config-schema";
 
+const DEFAULT_MCP_COMMANDS: Record<string, string> = {
+  filesystem: "npx -y @modelcontextprotocol/server-filesystem /workspace",
+  "brave-search": "npx -y @modelcontextprotocol/server-brave-search",
+  postgres: "npx -y @modelcontextprotocol/server-postgres",
+  sqlite: "npx -y @modelcontextprotocol/server-sqlite",
+  "memory-kg": "npx -y @modelcontextprotocol/server-memory",
+  "web-fetch": "npx -y @modelcontextprotocol/server-fetch",
+  git: "npx -y @modelcontextprotocol/server-git",
+  docker: "npx -y @modelcontextprotocol/server-docker",
+  "sequential-thinking": "npx -y @modelcontextprotocol/server-sequential-thinking",
+  "youtube-transcript": "npx -y mcp-server-youtube-transcript",
+  "google-drive": "npx -y google-drive-mcp",
+  gmail: "npx -y google-gmail-mcp",
+  "google-docs": "npx -y google-workspace-mcp",
+  "google-sheets": "npx -y google-workspace-mcp",
+};
+
 export function generateAgentConfig(agent: AgentDesign): string {
   const config = {
     agent: {
@@ -31,6 +48,13 @@ export function generateAgentConfig(agent: AgentDesign): string {
       allowed_commands: agent.shell.allowed_commands ?? [],
     },
     mcps: agent.mcps
+      .map((mcp) => {
+        let command = mcp.command;
+        if (mcp.transport === "stdio" && (!command || command.trim() === "")) {
+          command = DEFAULT_MCP_COMMANDS[mcp.name] || "";
+        }
+        return { ...mcp, command };
+      })
       .filter((mcp) => {
         // Drop stdio MCPs with no command — they will crash the MCP client on startup
         if (mcp.transport === "stdio" && (!mcp.command || mcp.command.trim() === "")) return false;

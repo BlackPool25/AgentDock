@@ -38,7 +38,7 @@ systemRoutes.post("/:id/start", async (c) => {
 
   await ensureNetwork(systemId);
 
-  const peerAgents = workflow.agents.map((a) => ({
+  const peerAgents = workflow.agents.map((a: any) => ({
     id: a.ref,
     url: `http://agentdock-${systemId}-${a.ref}:8080`,
   }));

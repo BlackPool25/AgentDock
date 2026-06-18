@@ -39,11 +39,11 @@ export function createSystemRoutes(config: SystemConfig) {
     }
 
     const connectionsList = (config.workflow.connections || []).map((conn, idx) => ({
-      id: conn.id || `conn-${idx}`,
+      id: (conn as any).id || `conn-${idx}`,
       from: conn.from,
       to: conn.to,
       active: false,
-      filePattern: conn.trigger?.file_pattern || conn.trigger?.filePattern || "",
+      filePattern: (conn.trigger as any).file_pattern || (conn.trigger as any).filePattern || "",
     }));
 
     return c.json({

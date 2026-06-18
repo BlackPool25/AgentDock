@@ -31,6 +31,12 @@ _OUTPUT_MARKER_INSTRUCTION = (
 )
 
 
+class FeedbackRequestedException(Exception):
+    def __init__(self, target_agent_id: str, query: str) -> None:
+        self.target_agent_id = target_agent_id
+        self.query = query
+
+
 def _extract_final_output(text: str) -> str:
     """
     Extract the content after ---FINAL OUTPUT--- marker.
@@ -67,6 +73,7 @@ class AgentLoop:
         Returns the final extracted output (not the full conversation).
         """
         import base64
+        self.current_task = task
 
         # 1. Gather available tools from all MCP servers
         try:
@@ -75,10 +82,13 @@ class AgentLoop:
             log.warning("agent_loop.mcp_tools_failed", error=str(e))
             mcp_tools = []
 
-        # 2. Built-in shell tool (if enabled)
+        # 2. Built-in tools (shell if enabled + feedback tool)
         all_tools: list[dict[str, Any]] = list(mcp_tools)
         if self.config.shell.enabled:
             all_tools.append(self._build_shell_tool_definition())
+        # Expose the feedback tool to all agents except system scheduler tasks
+        if getattr(task, "senderId", "") != "scheduler":
+            all_tools.append(self._build_feedback_tool_definition())
 
         # 3. Retrieve relevant RAG context for this task (with metadata for self-learning)
         rag_context = ""
@@ -185,6 +195,13 @@ class AgentLoop:
             except Exception as e:
                 return f"Shell error: {str(e)}"
 
+        if tool_call.name == "request_feedback":
+            target_agent_id = tool_call.arguments.get("target_agent_id")
+            query = tool_call.arguments.get("query")
+            if not target_agent_id or not query:
+                return "Error: target_agent_id and query are required."
+            raise FeedbackRequestedException(target_agent_id, query)
+
         # All other tools are MCP tools
         try:
             result = await self.mcp.call_tool(tool_call.name, tool_call.arguments)
@@ -246,6 +263,12 @@ class AgentLoop:
                         pass
 
         messages.append({"role": "user", "content": task.instruction})
+
+        feedback_history = getattr(task, "feedback_history", None)
+        if feedback_history:
+            for msg in feedback_history:
+                messages.append(msg)
+
         return messages
 
     async def _check_input_sufficiency(
@@ -285,6 +308,33 @@ class AgentLoop:
                         }
                     },
                     "required": ["command"],
+                },
+            },
+        }
+
+    def _build_feedback_tool_definition(self) -> dict[str, Any]:
+        return {
+            "type": "function",
+            "function": {
+                "name": "request_feedback",
+                "description": (
+                    "Request clarification or missing information from an upstream agent. "
+                    "Use this if you do not have enough information to proceed. "
+                    "This will suspend your current execution until the feedback is received."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target_agent_id": {
+                            "type": "string",
+                            "description": "The ID of the target upstream agent to request feedback from (e.g. ideation-agent)",
+                        },
+                        "query": {
+                            "type": "string",
+                            "description": "Specific query or question detailing the missing information or clarification needed.",
+                        }
+                    },
+                    "required": ["target_agent_id", "query"],
                 },
             },
         }
