@@ -35,18 +35,38 @@ import { MCP_REGISTRY } from "../../../../../packages/mcp-registry/src/index.js"
 const describeRoutes = new Hono();
 
 // Compact quality rules injected into agent generation prompts.
-// The full AGENT_QUALITY_RULES from agent-rules.ts is ~2500 tokens — too large for small models.
+// Enriched to produce production-grade multi-agent specifications, structured inputs, outputs, and exposed capabilities.
 const AGENT_QUALITY_RULES_COMPACT = `
-Agent rules (follow all):
-- systemPrompt: written in second person, specific to this agent's job, min 100 chars
-- temperature: 0.1 for classification/scoring, 0.3 for explanation, 0.6 for creative
-- Every action needs: name (snake_case verb), promptTemplate (mention exact file names), outputFile
-- outputFile: descriptive kebab-case .md (never "output.md" or "result.md")
-- First agent in pipeline: triggers must include {"type":"webhook"}
-- All other agents: triggers = [{"type":"task"}]
-- rag.enabled: true only if agent needs memory across sessions
-- rag.self_learning: true only for agents that improve from user interactions
-- tools.pythonPackages: ["duckduckgo-search"] for search_web, ["trafilatura","pypdf"] for fetch_url
+Agent Quality & Production-Grade Rules (follow all):
+1. Single Responsibility: Each agent has exactly ONE job.
+2. System Prompt Guidelines: Write in second person ("You are..."). It must be highly detailed and answer:
+   - What is this agent's single responsibility?
+   - What inputs does it receive? State exact filename paths (e.g., read from "/storage/received/{sender-agent-id}/{filename}" for upstream files).
+   - What tools should it use and when? (e.g. fetch_url, search_web, run_code).
+   - What is the exact format of its output?
+   - What output file does it write to (matching the action's outputFile)?
+3. Temperature Selection:
+   - 0.1 for classification, routing, scoring, or code execution
+   - 0.3 for explanations, summaries, or reports
+   - 0.6 for creative content or brainstorming
+4. Actions and File Deliverables:
+   - Every agent must have at least one action.
+   - Action name: snake_case verb phrase (e.g. "analyze_gap", "generate_report").
+   - outputFile: Set to exactly the agent's expected outputFile. Use descriptive kebab-case names ending in .md (e.g., "market-trends.md", "quiz-scores.md"). Never use "output.md" or "result.md".
+   - promptTemplate: Must reference the exact input filenames and instruct the agent to write its final output to the outputFile. Use the standard placeholder {{input.instruction}} for user instructions.
+5. Connections & Event Handoffs:
+   - First agent: Set trigger type to "webhook" (allows POST trigger) and "task" (allows manual run).
+   - Downstream agents: Trigger type is "task". They run when the orchestrator forwards a task event.
+   - Agents communicate by writing file deliverables to /memory/filename. The orchestrator triggers the downstream agent via a "file_received" connection once the file is written. The downstream agent reads the file at "/storage/received/{upstream-agent-id}/{filename}".
+6. RAG & User Profiles:
+   - If the system requires user history/progress tracking:
+     * Write profile state to a named file (e.g., "user-profile.md" or "profiles/{{input.userId}}.md" if multi-user).
+     * Set rag.enabled = true and rag.self_learning = true.
+     * Instruct the agent to read/write these profiles in RAG.
+7. Tools & Packages:
+   - If agent uses "search_web", add "duckduckgo-search" to tools.pythonPackages.
+   - If agent uses "fetch_url", add "trafilatura" and "pypdf" to tools.pythonPackages.
+   - If agent uses "run_code", no extra python packages are needed (it executes via standard shell).
 `;
 
 const DescribeRequestSchema = z.object({
@@ -307,6 +327,12 @@ ${JSON.stringify(previousConfig, null, 2)}
 Please correct these specific issues, ensure all output files, triggers, inputs, and formats are correctly specified, and output the complete corrected configuration JSON.`
     : "";
 
+  // Map input files to their source agent directory pathways
+  const upstreamConnections = intent.connections.filter(c => c.to === spec.id);
+  const inputPathsInstruction = upstreamConnections.map(conn =>
+    `- Upstream input "${conn.filePattern}" is written by agent "${conn.from}", so you MUST read/load it from: "/storage/received/${conn.from}/${conn.filePattern}".`
+  ).join("\n");
+
   const prompt = `You are generating a single agent config for a multi-agent system.
 
 Overall system goal: "${originalDescription}"
@@ -319,9 +345,11 @@ ${feedbackInstruction}
 Input files this agent reads: ${spec.inputFiles.length ? spec.inputFiles.join(", ") : "none (receives via webhook/task instruction)"}
 Output file this agent writes: ${spec.outputFile || "none (terminal agent)"}
 
-### CRITICAL FILENAME RULES (Strictly Enforced):
-${spec.inputFiles.length ? `- You MUST explicitly reference the exact input filename(s): ${spec.inputFiles.map(f => `"${f}"`).join(", ")} in BOTH your "systemPrompt" and your action "promptTemplate" (e.g., "Read the input file: ${spec.inputFiles[0]}").` : ''}
-${spec.outputFile ? `- You MUST set the action's "outputFile" field to EXACTLY "${spec.outputFile}" and explicitly mention this output filename in BOTH your "systemPrompt" and action "promptTemplate" (e.g., "Write results to ${spec.outputFile}").` : ''}
+### CRITICAL FILENAME & PATHING RULES (Strictly Enforced):
+${spec.inputFiles.length ? `- You MUST explicitly reference the exact input filename(s) and their directory paths in BOTH your "systemPrompt" and your action "promptTemplate" (e.g., "Read the input file from /storage/received/{upstream-agent-id}/filename").
+${inputPathsInstruction}` : ''}
+${spec.outputFile ? `- You MUST set the action's "outputFile" field to EXACTLY "${spec.outputFile}".
+- You MUST explicitly mention that the final output must be written to this file (e.g., "Write your final output to ${spec.outputFile}") in BOTH your "systemPrompt" and action "promptTemplate".` : ''}
 
 ${AGENT_QUALITY_RULES_COMPACT}
 
@@ -535,6 +563,12 @@ function buildCanvasState(
     const rag = a.rag as Record<string, unknown>;
     const tools = a.tools as Record<string, unknown>;
     const actions = a.actions as Array<Record<string, unknown>>;
+    const spec = intent.agents[i];
+    const needsShell = spec?.needsTools?.includes("run_code") ?? false;
+    const isFirst = spec?.triggeredBy === "webhook";
+    const expose = ["status", "logs", "memory", "tasks"];
+    if (isFirst) expose.push("chat");
+    if (needsShell) expose.push("shell");
 
     return {
       id: a.nodeId as string,
@@ -558,7 +592,11 @@ function buildCanvasState(
           self_learning_file: "rag-learned.md",
           min_confidence_threshold: 0.3,
         },
-        shell: { enabled: false, level: "restricted", allowed_commands: [] },
+        shell: {
+          enabled: needsShell,
+          level: "restricted",
+          allowed_commands: needsShell ? ["python3", "pip", "uv", "curl", "git"] : [],
+        },
         mcps: (a.mcps as Array<any> ?? []).map(mcp => ({
           name: mcp.name,
           transport: mcp.transport ?? "stdio",
@@ -577,7 +615,7 @@ function buildCanvasState(
           outputFile: act.outputFile ?? "",
         })),
         triggers: a.triggers,
-        expose: ["status", "logs", "memory", "tasks"],
+        expose,
         seedFiles: [],
         insufficientInput: { enabled: false, message: "", fallbackAction: "return_error" },
       },
