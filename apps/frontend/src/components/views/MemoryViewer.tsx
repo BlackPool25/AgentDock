@@ -39,53 +39,57 @@ export function MemoryViewer({ agentId }: Props) {
     <div className="flex h-full gap-3">
       {/* File list */}
       <div className="w-48 flex-shrink-0 overflow-y-auto">
-        <div className="text-xs text-muted-foreground mb-2 font-medium">Memory Files</div>
-        {memoryList?.files.map((f) => (
-          <button
-            key={f.filename}
-            onClick={() => { setSelectedFile(f.filename); setEditing(false); }}
-            className={`w-full text-left text-xs px-2 py-1.5 rounded truncate ${selectedFile === f.filename ? "bg-primary/20 text-primary" : "hover:bg-muted text-muted-foreground"}`}
-          >
-            {f.filename}
-          </button>
-        ))}
+        <div className="text-xs font-semibold text-muted-foreground mb-2 tracking-wider uppercase text-[10px]">Memory Files</div>
+        <div className="space-y-1">
+          {memoryList?.files.map((f) => (
+            <button
+              key={f.filename}
+              onClick={() => { setSelectedFile(f.filename); setEditing(false); }}
+              className={`w-full text-left text-xs px-2.5 py-2 rounded-lg truncate transition-colors ${selectedFile === f.filename ? "bg-primary/10 text-primary font-medium border border-primary/20" : "hover:bg-muted text-muted-foreground hover:text-foreground border border-transparent"}`}
+            >
+              {f.filename}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* File content */}
       <div className="flex-1 overflow-y-auto">
         {selectedFile && fileData ? (
           <>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-3 border-b border-border pb-2">
               <span className="text-xs font-mono text-muted-foreground">{selectedFile}</span>
-              <button
-                onClick={() => { setEditing(!editing); setEditContent(fileData.content); }}
-                className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80"
-              >
-                {editing ? "Cancel" : "Edit"}
-              </button>
-              {editing && (
+              <div className="flex gap-2">
                 <button
-                  onClick={() => saveMutation.mutate()}
-                  className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground ml-1"
+                  onClick={() => { setEditing(!editing); setEditContent(fileData.content); }}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted font-medium transition-colors"
                 >
-                  Save
+                  {editing ? "Cancel" : "Edit"}
                 </button>
-              )}
+                {editing && (
+                  <button
+                    onClick={() => saveMutation.mutate()}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity"
+                  >
+                    Save
+                  </button>
+                )}
+              </div>
             </div>
             {editing ? (
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full h-64 bg-black/40 text-xs font-mono p-2 rounded border border-border resize-none"
+                className="w-full h-64 bg-slate-50 text-xs font-mono p-3 rounded-lg border border-border focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all resize-none"
               />
             ) : (
-              <div className="prose prose-invert prose-sm max-w-none">
+              <div className="prose prose-slate prose-sm max-w-none leading-relaxed">
                 <ReactMarkdown>{fileData.content}</ReactMarkdown>
               </div>
             )}
           </>
         ) : (
-          <div className="text-muted-foreground text-sm">Select a file to view</div>
+          <div className="text-muted-foreground text-sm italic">Select a file to view</div>
         )}
       </div>
     </div>

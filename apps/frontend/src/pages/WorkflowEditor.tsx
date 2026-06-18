@@ -27,8 +27,8 @@ export function WorkflowEditor() {
     <div className="flex flex-col h-full">
       <Toolbar />
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 relative" onClick={() => setSelectedAgent(null)}>
-          <Canvas />
+        <div className="flex-1 relative">
+          <Canvas onSelectAgent={setSelectedAgent} />
         </div>
         {selectedAgent && (
           <AgentConfigPanel

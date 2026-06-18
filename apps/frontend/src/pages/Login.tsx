@@ -24,33 +24,44 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <form onSubmit={submit} className="bg-card border border-border rounded-xl p-8 w-80 space-y-4">
-        <h1 className="text-xl font-bold text-center">AgentDock</h1>
-        <p className="text-sm text-muted-foreground text-center">Sign in to your workspace</p>
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <form onSubmit={submit} className="bg-card border border-border rounded-xl p-8 w-full max-w-sm space-y-5 shadow-lg">
+        <div className="text-center space-y-1.5">
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">AgentDock</h1>
+          <p className="text-xs text-muted-foreground">Sign in to manage your agent workspace</p>
+        </div>
 
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          className="w-full bg-muted rounded px-3 py-2 text-sm outline-none"
-          required
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          className="w-full bg-muted rounded px-3 py-2 text-sm outline-none"
-          required
-        />
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wide">Email Address</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="e.g. admin@agentdock.local"
+              className="w-full bg-background rounded-lg border border-border px-3.5 py-2 text-xs outline-none focus:ring-1 focus:ring-primary/40 transition-all font-medium text-foreground"
+              required
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wide">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full bg-background rounded-lg border border-border px-3.5 py-2 text-xs outline-none focus:ring-1 focus:ring-primary/40 transition-all font-medium text-foreground"
+              required
+            />
+          </div>
+        </div>
+
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-primary text-primary-foreground rounded py-2 text-sm font-medium disabled:opacity-50"
+          className="w-full bg-primary text-primary-foreground rounded-lg py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity shadow-sm"
         >
-          {loading ? "Signing in…" : "Sign in"}
+          {loading ? "Signing in…" : "Sign In"}
         </button>
       </form>
     </div>

@@ -17,7 +17,7 @@ import { useWorkflowStore } from "../../stores/workflow.store.js";
 const nodeTypes = { agentNode: AgentNode };
 const edgeTypes = { triggerEdge: TriggerEdge };
 
-export function Canvas() {
+export function Canvas({ onSelectAgent }: { onSelectAgent?: (id: string | null) => void }) {
   const { nodes: storeNodes, edges: storeEdges, setNodes, setEdges, markDirty } = useWorkflowStore();
   const [nodes, setLocalNodes, onNodesChange] = useNodesState(storeNodes);
   const [edges, setLocalEdges, onEdgesChange] = useEdgesState(storeEdges);
@@ -44,6 +44,17 @@ export function Canvas() {
     [onNodesChange, nodes, setNodes, markDirty]
   );
 
+  const onNodeClick = useCallback(
+    (_e: any, node: any) => {
+      onSelectAgent?.(node.id);
+    },
+    [onSelectAgent]
+  );
+
+  const onPaneClick = useCallback(() => {
+    onSelectAgent?.(null);
+  }, [onSelectAgent]);
+
   return (
     <div className="h-full w-full">
       <ReactFlow
@@ -52,6 +63,8 @@ export function Canvas() {
         onNodesChange={onNodesChangeHandler}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView

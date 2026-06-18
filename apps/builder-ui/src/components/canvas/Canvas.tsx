@@ -1,10 +1,11 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useEffect } from "react";
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
   BackgroundVariant,
+  useReactFlow,
   type NodeMouseHandler,
   type EdgeMouseHandler,
   type NodeTypes,
@@ -28,6 +29,17 @@ export function Canvas() {
     onNodesChange, onEdgesChange,
     selectNode, selectEdge, addAgentNode,
   } = useCanvasStore();
+
+  const { fitView } = useReactFlow();
+
+  useEffect(() => {
+    if (nodes.length > 0) {
+      const timer = setTimeout(() => {
+        fitView({ padding: 0.2, duration: 250 });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [nodes.length, fitView]);
 
   // Custom onConnect that creates edge with proper defaults
   const handleConnect = useCallback((connection: Connection) => {

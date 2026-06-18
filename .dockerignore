@@ -2,4 +2,6 @@
 **/.git
 **/dist
 **/build
+**/.venv
+demo/
 apps/builder-api/data

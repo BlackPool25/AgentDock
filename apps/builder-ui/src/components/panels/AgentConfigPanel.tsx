@@ -57,6 +57,13 @@ function ValidationBadge({ data }: { data: AgentDesign }) {
   );
 }
 
+const CATEGORIES = {
+  Core: ["General", "LLM", "Seed", "Input"],
+  Data: ["Memory", "RAG", "Expose"],
+  Integration: ["MCPs", "Tools", "Shell", "Actions"],
+  Triggers: ["Triggers"],
+} as const;
+
 export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
   const [tab, setTab] = useState<Tab>("General");
   const node = useCanvasStore((s) => s.nodes.find((n) => n.id === nodeId));
@@ -97,24 +104,52 @@ export function AgentConfigPanel({ nodeId }: { nodeId: string }) {
 
   const update = (patch: Partial<AgentDesign>) => updateNodeData(nodeId, patch);
 
+  const activeCategory = (Object.keys(CATEGORIES) as Array<keyof typeof CATEGORIES>).find(
+    (cat) => (CATEGORIES[cat] as readonly string[]).includes(tab)
+  ) ?? "Core";
+
+  const handleCategoryClick = (cat: keyof typeof CATEGORIES) => {
+    setTab(CATEGORIES[cat][0] as any);
+  };
+
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-border">
-        <p className="text-sm font-semibold">Agent Config</p>
-        <p className="text-xs text-muted-foreground font-mono">{data.id}</p>
+      <div className="px-4 py-3 border-b border-border bg-card/10">
+        <p className="text-sm font-bold text-foreground">Agent Configuration</p>
+        <p className="text-xs text-muted-foreground font-mono mt-0.5">{data.id}</p>
       </div>
 
       <ValidationBadge data={data} />
 
-      {/* Tabs */}
-      <div className="flex gap-1 px-3 pt-2 flex-wrap">
-        {TABS.map((t) => (
+      {/* Categories select row */}
+      <div className="flex border-b border-border bg-muted/20 shrink-0">
+        {(Object.keys(CATEGORIES) as Array<keyof typeof CATEGORIES>).map((cat) => (
+          <button
+            key={cat}
+            onClick={() => handleCategoryClick(cat)}
+            className={cn(
+              "flex-1 text-center py-2 text-xs font-semibold border-b-2 transition-all",
+              activeCategory === cat
+                ? "border-primary text-primary bg-background"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30"
+            )}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* Sub-tabs pills */}
+      <div className="flex gap-1.5 px-3 py-2 flex-wrap border-b border-border/50 bg-card/20 shrink-0">
+        {CATEGORIES[activeCategory].map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => setTab(t as any)}
             className={cn(
-              "text-xs px-2 py-1 rounded transition-colors",
-              tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              "text-[10px] uppercase font-bold tracking-wide px-2 py-1 rounded transition-colors",
+              tab === t
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
             {t}

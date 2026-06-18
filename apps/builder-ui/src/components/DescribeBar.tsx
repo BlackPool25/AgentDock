@@ -80,14 +80,16 @@ export function DescribeBar({ onDescribe, onPatch, hasNodes, isLoading }: Props)
           <button
             type="button"
             onClick={() => setMode("describe")}
-            className={`px-2 py-1 text-xs transition-colors ${mode === "describe" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+            title="AI Suggest: Generate a new multi-agent pipeline based on your prompt"
+            className={`px-2 py-1 text-xs font-semibold transition-colors ${mode === "describe" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
           >
-            Generate
+            AI Design
           </button>
           <button
             type="button"
             onClick={() => setMode("patch")}
-            className={`px-2 py-1 text-xs transition-colors ${mode === "patch" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+            title="AI Patch: Modify individual properties or structure of existing nodes"
+            className={`px-2 py-1 text-xs font-semibold transition-colors ${mode === "patch" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
           >
             <Pencil className="w-3 h-3 inline mr-1" />Patch
           </button>
@@ -191,10 +193,10 @@ export function DescribeBar({ onDescribe, onPatch, hasNodes, isLoading }: Props)
       <button
         type="submit"
         disabled={!value.trim() || isLoading}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary text-primary hover:bg-primary/10 disabled:opacity-40 disabled:hover:bg-transparent font-semibold transition-all shrink-0 text-xs shadow-sm bg-card"
       >
         {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-        {isLoading ? "Building…" : mode === "patch" ? "Apply" : "Generate"}
+        {isLoading ? "Building…" : mode === "patch" ? "Apply Patch" : "Build with AI"}
       </button>
     </form>
   );

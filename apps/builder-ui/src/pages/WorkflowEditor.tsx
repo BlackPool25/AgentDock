@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Save, Download, Bot, AlertTriangle, CheckCircle2, X } from "lucide-react";
+import { ArrowLeft, Save, Download, Bot, AlertTriangle, CheckCircle2, X, Sparkles } from "lucide-react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { Canvas } from "@/components/canvas/Canvas.js";
 import { AgentConfigPanel } from "@/components/panels/AgentConfigPanel.js";
@@ -69,6 +69,8 @@ export function WorkflowEditor() {
   const generatingRef = useRef(false);
   const [showValidation, setShowValidation] = useState(false);
   const [isDescribing, setIsDescribing] = useState(false);
+  const [showAiAssistant, setShowAiAssistant] = useState(false);
+  const [showTips, setShowTips] = useState(false);
   // Stable refs so triggerSave never needs nodes/edges in its dep array
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -217,7 +219,7 @@ export function WorkflowEditor() {
   };
 
   const saveStatusLabel = { saved: "Saved", saving: "Saving…", unsaved: "Unsaved", error: "Save failed" }[saveStatus];
-  const saveStatusColor = { saved: "text-green-400", saving: "text-yellow-400", unsaved: "text-muted-foreground", error: "text-destructive" }[saveStatus];
+  const saveStatusColor = { saved: "text-green-600", saving: "text-yellow-600", unsaved: "text-muted-foreground", error: "text-destructive" }[saveStatus];
 
   const validationIssues = validatePipeline(nodes, edges);
   const errorCount = validationIssues.filter(i => i.severity === "error").length;
@@ -227,11 +229,25 @@ export function WorkflowEditor() {
     <div className="flex flex-col h-screen">
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-card shrink-0">
-        <button onClick={() => navigate("/")} className="p-1.5 rounded hover:bg-muted transition-colors">
-          <ArrowLeft className="w-4 h-4" />
+        <button onClick={() => navigate("/")} className="p-1.5 rounded hover:bg-muted transition-colors flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="w-4 h-4" /> Library
         </button>
-        <h1 className="font-semibold text-sm flex-1 truncate">{current?.name ?? "Loading…"}</h1>
-        <span className={`text-xs ${saveStatusColor}`}>{saveStatusLabel}</span>
+        <h1 className="font-bold text-sm flex-1 truncate ml-2">{current?.name ?? "Loading…"}</h1>
+        <span className={`text-xs font-semibold ${saveStatusColor}`}>{saveStatusLabel}</span>
+
+        {/* AI Assistant toggle */}
+        <button
+          onClick={() => setShowAiAssistant(!showAiAssistant)}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors",
+            showAiAssistant
+              ? "bg-primary/10 border-primary text-primary"
+              : "border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+          )}
+          title="Toggle AI prompt tool"
+        >
+          <Sparkles className="w-3.5 h-3.5" /> AI Designer
+        </button>
 
         {/* Validation indicator */}
         {validationIssues.length > 0 && (
@@ -239,7 +255,7 @@ export function WorkflowEditor() {
             onClick={() => setShowValidation(!showValidation)}
             className={cn(
               "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
-              errorCount > 0 ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+              errorCount > 0 ? "bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-200" : "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border border-amber-200"
             )}
           >
             <AlertTriangle className="w-3 h-3" />
@@ -258,47 +274,87 @@ export function WorkflowEditor() {
             };
             saveMutation.mutate(canvas);
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs hover:border-primary/50 transition-colors"
+          disabled={saveStatus === "saved" || saveStatus === "saving"}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:border-primary/50 transition-colors disabled:opacity-40"
         >
           <Save className="w-3 h-3" /> Save
         </button>
         <button
           onClick={handleGenerate}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs hover:opacity-90 transition-opacity"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity"
         >
-          <Download className="w-3 h-3" /> Generate
+          <Download className="w-3 h-3" /> Generate System
         </button>
       </div>
 
-      <DescribeBar
-        onDescribe={handleDescribe}
-        onPatch={handlePatch}
-        hasNodes={nodes.length > 0}
-        isLoading={isDescribing}
-      />
+      {showAiAssistant && (
+        <DescribeBar
+          onDescribe={handleDescribe}
+          onPatch={handlePatch}
+          hasNodes={nodes.length > 0}
+          isLoading={isDescribing}
+        />
+      )}
 
       <div className="flex flex-1 overflow-hidden">        {/* Left sidebar — agent palette */}
-        <div className="w-48 border-r border-border bg-card p-3 shrink-0">
-          <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wide">Palette</p>
-          <div
-            draggable
-            onDragStart={(e) => e.dataTransfer.setData("application/agentdock-node", "agent")}
-            className="flex items-center gap-2 p-2 rounded-lg border border-border cursor-grab hover:border-primary/50 transition-colors"
-          >
-            <Bot className="w-4 h-4 text-primary" />
-            <span className="text-xs">Agent</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-4">Drag onto canvas to add an agent</p>
+        <div className="w-48 border-r border-border bg-card p-3 shrink-0 flex flex-col justify-between overflow-y-auto">
+          <div>
+            <p className="text-xs text-muted-foreground mb-3 font-bold uppercase tracking-wide">Palette</p>
+            <div
+              draggable
+              onDragStart={(e) => e.dataTransfer.setData("application/agentdock-node", "agent")}
+              className="flex items-center gap-2 p-2 rounded-lg border border-border cursor-grab hover:border-primary/50 transition-colors bg-background"
+            >
+              <Bot className="w-4 h-4 text-primary" />
+              <span className="text-xs font-semibold">Agent</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">Drag onto canvas to add an agent node</p>
 
-          {/* Quick tips */}
-          <div className="mt-6 space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tips</p>
-            <ul className="text-[10px] text-muted-foreground space-y-1">
-              <li>• Click agent to configure</li>
-              <li>• Drag from handles to connect</li>
-              <li>• Click edge to set trigger</li>
-              <li>• Add actions with output_file for file_received triggers</li>
-            </ul>
+            {/* Quick tips */}
+            <div className="mt-6 border-t border-border pt-4">
+              <button
+                onClick={() => setShowTips(!showTips)}
+                className="flex items-center justify-between w-full text-xs font-bold text-muted-foreground hover:text-foreground transition-colors uppercase tracking-wide"
+              >
+                <span>Quick Tips</span>
+                <span className="text-[10px] font-mono">{showTips ? "−" : "+"}</span>
+              </button>
+              {showTips && (
+                <ul className="text-[10px] text-muted-foreground space-y-1.5 mt-2 bg-muted/40 p-2.5 rounded-lg border border-border leading-normal">
+                  <li>• Click agent to configure</li>
+                  <li>• Drag from handles to connect</li>
+                  <li>• Click edge to set trigger</li>
+                  <li>• Add actions with output_file for file_received triggers</li>
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* Node Legend */}
+          <div className="mt-6 border-t border-border pt-4">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-2.5">Node Legend</p>
+            <div className="space-y-2 text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-1.5" title="Indicates the LLM provider for the agent">
+                <span className="w-2.5 h-2.5 rounded bg-blue-500/20 border border-blue-400" />
+                <span>LLM Model / Provider</span>
+              </div>
+              <div className="flex items-center gap-1.5" title="Indicates what activates this agent node">
+                <span className="w-2.5 h-2.5 rounded bg-indigo-500/20 border border-indigo-400" />
+                <span>Active Triggers</span>
+              </div>
+              <div className="flex items-center gap-1.5" title="Indicates configured action functions inside the agent">
+                <span className="w-2.5 h-2.5 rounded bg-amber-500/20 border border-amber-400" />
+                <span>Configured Actions</span>
+              </div>
+              <div className="flex items-center gap-1.5" title="Indicates the agent has bash command execution access">
+                <span className="w-2.5 h-2.5 rounded bg-red-500/20 border border-red-400" />
+                <span>Shell Permissions</span>
+              </div>
+              <div className="flex items-center gap-1.5" title="Indicates connected MCP server tools">
+                <span className="w-2.5 h-2.5 rounded bg-violet-500/20 border border-violet-400" />
+                <span>MCP Server Tools</span>
+              </div>
+            </div>
           </div>
         </div>
 

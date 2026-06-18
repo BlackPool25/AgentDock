@@ -46,6 +46,7 @@ createRoot(document.getElementById("root")!).render(
                 <AppLayout>
                   <Routes>
                     <Route path="/" element={<Dashboard />} />
+                    <Route path="/workflows" element={<Navigate to="/" replace />} />
                     <Route path="/workflows/:id" element={<WorkflowEditor />} />
                     <Route path="/agents/:id" element={<AgentDetail />} />
                   </Routes>

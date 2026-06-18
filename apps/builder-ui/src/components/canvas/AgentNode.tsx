@@ -5,11 +5,11 @@ import { cn } from "@/lib/utils.js";
 import type { AgentNodeData } from "@/stores/canvas.store.js";
 
 const PROVIDER_COLORS: Record<string, string> = {
-  ollama: "bg-green-500/20 text-green-400",
-  openai: "bg-emerald-500/20 text-emerald-400",
-  anthropic: "bg-orange-500/20 text-orange-400",
-  gemini: "bg-blue-500/20 text-blue-400",
-  groq: "bg-purple-500/20 text-purple-400",
+  ollama: "bg-green-50 text-green-700 border border-green-200/60",
+  openai: "bg-emerald-50 text-emerald-700 border border-emerald-200/60",
+  anthropic: "bg-orange-50 text-orange-700 border border-orange-200/60",
+  gemini: "bg-blue-50 text-blue-700 border border-blue-200/60",
+  groq: "bg-purple-50 text-purple-700 border border-purple-200/60",
 };
 
 // Source handles (outgoing) are on the left/top-left, target handles (incoming) on the right/bottom-right.
@@ -33,7 +33,7 @@ export const AgentNode = memo(({ data, selected }: NodeProps) => {
     <div
       className={cn(
         "min-w-[220px] rounded-lg border bg-card shadow-lg transition-all",
-        selected ? "border-primary shadow-primary/20 shadow-md" : "border-border"
+        selected ? "border-primary shadow-primary/20 shadow-md ring-1 ring-primary/40" : "border-border"
       )}
     >
       {/* ── Left side: source (outgoing) handles ── */}
@@ -99,44 +99,44 @@ export const AgentNode = memo(({ data, selected }: NodeProps) => {
             <Bot className="w-4 h-4 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{nodeData.name || "Unnamed Agent"}</p>
-            <p className="text-xs text-muted-foreground font-mono truncate">{nodeData.id}</p>
+            <p className="text-sm font-bold text-foreground truncate">{nodeData.name || "Unnamed Agent"}</p>
+            <p className="text-[10px] text-muted-foreground font-mono truncate">{nodeData.id}</p>
           </div>
         </div>
 
         {/* Provider + key badges */}
         <div className="flex items-center gap-1.5 flex-wrap mb-2">
-          <span className={cn("text-xs px-1.5 py-0.5 rounded font-mono", providerColor)}>
+          <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded font-mono border", providerColor)}>
             {nodeData.llm?.provider ?? "ollama"}
           </span>
           {hasWebhook && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 flex items-center gap-1" title="Webhook trigger">
-              <Globe className="w-3 h-3" />
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200/60 flex items-center gap-1" title="Webhook trigger enabled">
+              <Globe className="w-2.5 h-2.5" /> Webhook
             </span>
           )}
           {hasCron && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 flex items-center gap-1" title="Cron trigger">
-              <Zap className="w-3 h-3" />
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center gap-1" title="Cron trigger scheduler active">
+              <Zap className="w-2.5 h-2.5 animate-pulse" /> Cron
             </span>
           )}
           {hasTask && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400" title="Task trigger">
-              task
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/60" title="Task trigger active">
+              Task
             </span>
           )}
           {hasShell && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 flex items-center gap-1" title="Shell enabled">
-              <Terminal className="w-3 h-3" />
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center gap-1" title="Shell terminal access enabled">
+              <Terminal className="w-2.5 h-2.5" /> Shell
             </span>
           )}
           {hasMCPs && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400" title={`${nodeData.mcps.length} MCP(s)`}>
-              {nodeData.mcps.length}mcp
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200/60" title={`${nodeData.mcps.length} connected MCP tool(s)`}>
+              {nodeData.mcps.length} MCP
             </span>
           )}
           {actionCount > 0 && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
-              {actionCount} action{actionCount > 1 ? "s" : ""}
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200/60" title={`${actionCount} custom actions configured`}>
+              {actionCount} Act
             </span>
           )}
         </div>

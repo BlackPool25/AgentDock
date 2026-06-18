@@ -46,13 +46,13 @@ export function Toolbar() {
     <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card">
       <span className="text-sm font-semibold text-foreground mr-2">
         {currentWorkflow?.workflow.name ?? "No workflow"}
-        {isDirty && <span className="ml-1 text-yellow-400">●</span>}
+        {isDirty && <span className="ml-1 text-amber-500 font-bold" title="Unsaved changes">●</span>}
       </span>
 
       <button
         onClick={() => saveMutation.mutate()}
         disabled={!isDirty || saveMutation.isPending}
-        className="flex items-center gap-1 rounded px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 disabled:opacity-50"
+        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground font-semibold disabled:opacity-50 transition-colors"
       >
         <Save size={14} /> Save
       </button>
@@ -60,7 +60,7 @@ export function Toolbar() {
       <button
         onClick={() => startMutation.mutate()}
         disabled={!currentWorkflow || startMutation.isPending}
-        className="flex items-center gap-1 rounded px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50 transition-colors"
       >
         <Play size={14} /> Deploy
       </button>
@@ -68,7 +68,7 @@ export function Toolbar() {
       <button
         onClick={() => stopMutation.mutate()}
         disabled={!currentWorkflow || stopMutation.isPending}
-        className="flex items-center gap-1 rounded px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold disabled:opacity-50 transition-colors"
       >
         <Square size={14} /> Stop
       </button>

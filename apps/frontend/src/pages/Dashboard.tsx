@@ -37,22 +37,22 @@ export function Dashboard() {
           {systems?.map((s) => (
             <div key={s.id} className="bg-card border border-border rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="font-medium text-sm">{s.name ?? s.id}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${s.status === "running" ? "bg-green-500/20 text-green-400" : "bg-gray-500/20 text-gray-400"}`}>
+                <span className="font-semibold text-sm text-foreground">{s.name ?? s.id}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${s.status === "running" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
                   {s.status}
                 </span>
               </div>
-              <div className="text-xs text-muted-foreground mb-3">{s.agentCount} agents</div>
+              <div className="text-xs text-muted-foreground mb-3 font-medium">{s.agentCount} agents</div>
               <div className="flex gap-2">
                 <button
                   onClick={() => startMutation.mutate(s.id)}
-                  className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-green-600/20 text-green-400 hover:bg-green-600/30"
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
                 >
                   <Play size={12} /> Start
                 </button>
                 <button
                   onClick={() => stopMutation.mutate(s.id)}
-                  className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-red-600/20 text-red-400 hover:bg-red-600/30"
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors"
                 >
                   <Square size={12} /> Stop
                 </button>
