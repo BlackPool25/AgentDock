@@ -29,7 +29,7 @@ import { db } from "../../db/client.js";
 import { systems } from "../../db/schema.js";
 import { logger } from "../../logger.js";
 import { AGENT_QUALITY_RULES, USER_STATE_RULES, PIPELINE_PATTERNS } from "./agent-rules.js";
-import { MCP_REGISTRY } from "../../../../../packages/mcp-registry/src/index.js";
+import { PLATFORM_MCPS, searchSmithery, smitheryServerUrl } from "../../../../../packages/mcp-registry/src/index.js";
 
 
 const describeRoutes = new Hono();
@@ -273,22 +273,56 @@ Rules:
 
 // ── Phase 2: Per-Agent Config Generation ─────────────────────────────────────
 
-function getMCPSummaryPrompt(description: string): string {
-  const descLower = description.toLowerCase();
-  // Keywords that suggest specific MCP categories
-  const relevant = MCP_REGISTRY.filter(mcp => {
-    const text = (mcp.name + " " + mcp.description + " " + (mcp.audiences || []).join(" ")).toLowerCase();
-    // Always include core communication/search MCPs
-    if (["brave-search", "web-fetch", "filesystem", "memory-kg", "sequential-thinking"].includes(mcp.id)) return true;
-    // Include if description mentions related keywords
-    const keywords = text.split(/\s+/);
-    return keywords.some(kw => kw.length > 4 && descLower.includes(kw));
-  }).slice(0, 12); // cap at 12 to keep prompt short
+/**
+ * Build the MCP context block for the agent generation prompt.
+ *
+ * Strategy:
+ * 1. Always include PLATFORM_MCPS (filesystem, memory-kg, sequential-thinking, web-fetch).
+ * 2. If SMITHERY_API_KEY is set, query Smithery for servers semantically relevant to the
+ *    system description and append up to 8 results.
+ * 3. Deduplicate by name to avoid listing a platform MCP twice.
+ * 4. Format each entry with its connection method so the LLM can configure it correctly.
+ */
+async function buildMCPContext(description: string): Promise<string> {
+  // Platform MCPs — always available (stdio, pre-bundled npx commands)
+  const platformLines = PLATFORM_MCPS.map(mcp =>
+    `- ${mcp.id}: ${mcp.name} — ${mcp.description}\n  → transport: "stdio", command: "${mcp.command}"`
+  );
 
-  if (relevant.length === 0) return "No specific MCPs needed beyond builtin tools (search_web, fetch_url, run_code).";
-  return relevant.map(mcp =>
-    `- ${mcp.id}: ${mcp.name} — ${mcp.description} (transport: "${mcp.transport}", pkg: "${mcp.package}")`
-  ).join("\n");
+  // Live Smithery search for domain-specific servers
+  const smitheryResults = await searchSmithery(description, 8);
+  const platformIds = new Set(PLATFORM_MCPS.map(m => m.id));
+
+  const smitheryLines = smitheryResults
+    .filter(s => !platformIds.has(s.qualifiedName))
+    .map(s => {
+      const url = smitheryServerUrl(s.qualifiedName);
+      const badge = s.verified ? " ✓" : "";
+      if (s.remote && s.isDeployed) {
+        return `- ${s.qualifiedName}: ${s.displayName}${badge} — ${s.description.slice(0, 120)}\n  → transport: "streamable-http", url: "${url}", env: { "SMITHERY_API_KEY": "<your key>" }`;
+      }
+      // Non-hosted server — LLM should not include unless user has explicit setup
+      return `- ${s.qualifiedName}: ${s.displayName}${badge} — ${s.description.slice(0, 120)}\n  → self-hosted (not available on Smithery cloud)`;
+    });
+
+  const allLines = [...platformLines, ...smitheryLines];
+  if (allLines.length === 0) {
+    return "Available MCP servers: None discovered. Use builtin tools (search_web, fetch_url, run_code) instead.";
+  }
+
+  const smitheryNote = process.env.SMITHERY_API_KEY
+    ? `(${smitheryResults.length} Smithery results included)`
+    : "(Set SMITHERY_API_KEY to enable live Smithery discovery)";
+
+  return `Available MCP servers ${smitheryNote} — only include in "mcps" if the agent genuinely requires external service integration:
+
+CONFIGURATION RULES:
+- stdio MCPs: set transport="stdio", command="<npx command>", leave url empty.
+- streamable-http (Smithery) MCPs: set transport="streamable-http", url="<url>", env={"SMITHERY_API_KEY":"<your key>"}, leave command empty.
+- Include an MCP only if the agent CANNOT do its job without that external integration.
+- DO NOT add MCPs just because they sound related — prioritize builtin tools first.
+
+${allLines.join("\n\n")}`;
 }
 
 // ── Phase 2: Per-Agent Config Generation ─────────────────────────────────────
@@ -314,8 +348,7 @@ async function generateAgentConfig(
     ? `This agent needs these builtin tools: ${spec.needsTools.join(", ")}.`
     : "This agent does not need external tools.";
 
-  const mcpRegistryPrompt = `Available MCP servers (choose only if needed for external integrations):
-${getMCPSummaryPrompt(originalDescription)}`;
+  const mcpRegistryPrompt = await buildMCPContext(originalDescription);
 
   const feedbackInstruction = feedback && previousConfig
     ? `\n### CRITICAL: Your previous generation attempt failed validation with the following feedback:

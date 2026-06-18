@@ -1,181 +1,99 @@
 # AgentDock MCP Registry
 
-52 MCPs across 9 tiers for Indian EdTech pipelines — K-12 through Post-Graduate.
-
-**Legend:** 🟢 Default (pre-wired) | 🟡 Optional (one-click) | 🔴 Advanced (expert)
+AgentDock uses **Smithery** as its MCP discovery layer. Instead of shipping a hardcoded list of domain-specific servers, the builder queries the Smithery registry live during agent generation and surfaces the most relevant MCP servers for each system description.
 
 ---
 
-## Default Bundle (ships pre-wired in every project)
+## How It Works
 
-| MCP | Package | Env Vars |
-|-----|---------|----------|
-| Filesystem | `@modelcontextprotocol/server-filesystem` | — |
-| PostgreSQL | `@modelcontextprotocol/server-postgres` | `POSTGRES_URL` |
-| Redis | `@modelcontextprotocol/server-redis` | `REDIS_URL` |
-| Memory (KG) | `@modelcontextprotocol/server-memory` | — |
-| Sequential Thinking | `@modelcontextprotocol/server-sequential-thinking` | — |
-| Web Fetch | `@modelcontextprotocol/server-fetch` | — |
-| Web Search (Brave) | `@modelcontextprotocol/server-brave-search` | `BRAVE_API_KEY` |
-| YouTube Transcript | `kimtaeyoon83/mcp-server-youtube-transcript` | — |
-| PDF Reader | `@modelcontextprotocol/server-filesystem` | — |
-| Google Classroom | `faizan45640/google-classroom-mcp` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` |
-| Google Drive | `google-drive-mcp` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` |
-| Google Docs | `google-workspace-mcp` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` |
-| Google Sheets | `google-workspace-mcp` | same as above |
-| IndicTrans2 | `agentdock/mcp-server-indictrans2` | `AI4BHARAT_API_KEY` |
-| Gmail | `google-gmail-mcp` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` |
-| Docker | `@modelcontextprotocol/server-docker` | — |
-| Git | `@modelcontextprotocol/server-git` | — |
+When you click **Describe** in the builder, the generation pipeline:
+
+1. **Analyzes intent** — extracts the agents, data flows, and tool requirements from your description.
+2. **Queries Smithery** — calls `GET https://api.smithery.ai/servers?q={description}` to find the top 8 semantically relevant MCP servers for the system.
+3. **Injects the results** — the LLM sees the discovered servers alongside the 4 platform MCPs and decides which ones to configure for each agent.
+4. **Configures connections** — stdio platform MCPs use `npx` commands; Smithery-hosted MCPs use streamable-http URLs.
+
+This means AgentDock works with **any MCP server on Smithery**, not just a pre-approved EdTech bundle.
 
 ---
 
-## Tier 1 — Core Infrastructure
+## Two MCP Tiers
 
-| # | MCP | Status | Action |
-|---|-----|--------|--------|
-| 1 | Filesystem | 🟢 | connect |
-| 2 | PostgreSQL | 🟢 | connect |
-| 3 | Redis | 🟢 | connect |
-| 4 | SQLite | 🟢 | connect |
-| 5 | Memory (Knowledge Graph) | 🟢 | connect |
-| 6 | Web Search (Brave) | 🟢 | connect |
-| 7 | Web Fetch | 🟢 | connect |
+### Tier 1 — Platform MCPs (always available)
 
-## Tier 2 — Education Platforms
+These 4 servers are bundled with every AgentDock project. No API key or cloud connection needed.
 
-| # | MCP | Status | Action |
-|---|-----|--------|--------|
-| 8 | Google Classroom | 🟢 | connect |
-| 9 | YouTube Transcript | 🟢 | connect |
-| 10 | Google Drive | 🟢 | connect |
-| 11 | Notion | 🟡 | connect |
-| 12 | Moodle | 🟡 | **build** |
-| 13 | Khan Academy | 🟡 | connect |
-| 14 | Udemy Business | 🟡 | connect |
-| 15 | Canvas LMS | 🟡 | connect |
-| 16 | GitHub | 🟡 | connect |
+| MCP | Package | Command | Use when |
+|-----|---------|---------|----------|
+| `filesystem` | `@modelcontextprotocol/server-filesystem` | `npx -y @modelcontextprotocol/server-filesystem /workspace` | Reading/writing local files, agent memory |
+| `memory-kg` | `@modelcontextprotocol/server-memory` | `npx -y @modelcontextprotocol/server-memory` | Persistent cross-session knowledge graph memory |
+| `sequential-thinking` | `@modelcontextprotocol/server-sequential-thinking` | `npx -y @modelcontextprotocol/server-sequential-thinking` | Structured multi-step reasoning |
+| `web-fetch` | `@modelcontextprotocol/server-fetch` | `npx -y @modelcontextprotocol/server-fetch` | Fetching and parsing arbitrary URLs |
 
-## Tier 3 — Research & Academic
-
-| # | MCP | Status | Action |
-|---|-----|--------|--------|
-| 17 | ArXiv | 🟢 (PG template) | connect |
-| 18 | Scientific Papers Multi-Source | 🟡 | connect |
-| 19 | PubMed | 🟡 | connect |
-| 20 | Semantic Scholar | 🟡 | **build** |
-| 21 | Google Scholar | 🔴 | **build** |
-| 22 | Shodhganga / JSTOR | 🔴 | **build** |
-
-## Tier 4 — Communication
-
-| # | MCP | Status | Action |
-|---|-----|--------|--------|
-| 23 | Gmail | 🟢 | connect |
-| 24 | Google Calendar | 🟢 | connect |
-| 25 | Slack | 🟡 | connect |
-| 26 | WhatsApp Business | 🟡 | **build** (MSG91/Gupshup gateway) |
-| 27 | Twilio SMS | 🟡 | connect |
-| 28 | Microsoft Teams | 🟡 | connect |
-| 29 | Telegram Bot | 🟡 | connect |
-
-## Tier 5 — Productivity & Content
-
-| # | MCP | Status | Action |
-|---|-----|--------|--------|
-| 30 | Google Docs | 🟢 | connect |
-| 31 | Google Sheets | 🟢 | connect |
-| 32 | Google Slides | 🟡 | connect |
-| 33 | PDF Reader/Writer | 🟢 | connect |
-| 34 | Puppeteer/Playwright | 🟡 | connect |
-| 35 | Firecrawl | 🟡 | connect |
-
-## Tier 6 — Developer & Agent Infra
-
-| # | MCP | Status | Action |
-|---|-----|--------|--------|
-| 36 | Docker | 🟢 | connect |
-| 37 | Git | 🟢 | connect |
-| 38 | Sentry | 🟡 | connect |
-| 39 | Context7 | 🟡 | connect |
-| 40 | Sequential Thinking | 🟢 | connect |
-
-## Tier 7 — Indian Payment & Identity
-
-| # | MCP | Status | Action |
-|---|-----|--------|--------|
-| 41 | Razorpay | 🟡 | **build** |
-| 42 | DigiLocker | 🔴 | **build** (compliance required) |
-| 43 | NPCI / UPI Status | 🔴 | **build** |
-| 44 | Aadhaar eKYC | 🔴 | **build** (UIDAI compliance) |
-
-## Tier 8 — Language & AI
-
-| # | MCP | Status | Action |
-|---|-----|--------|--------|
-| 45 | IndicTrans2 / AI4Bharat | 🟢 | **build** |
-| 46 | Sarvam AI | 🟡 | **build** |
-| 47 | Bhashini (ULCA) | 🟡 | **build** (free govt API) |
-| 48 | ElevenLabs TTS | 🟡 | connect |
-
-## Tier 9 — Vector Store & RAG
-
-| # | MCP | Status | Action |
-|---|-----|--------|--------|
-| 49 | Chroma | 🟢 | connect |
-| 50 | Qdrant | 🟡 | connect |
-| 51 | Cognee (Knowledge Graph) | 🟡 | connect |
-| 52 | ApeRAG | 🔴 | connect |
-
----
-
-## Audience Auto-Suggest
-
-When a user selects their target audience, these MCPs are auto-suggested:
-
-| Audience | Auto-Suggested MCPs |
-|----------|---------------------|
-| Primary (Class 1–5) | Khan Academy, WhatsApp, Google Classroom |
-| Middle (Class 6–8) | Khan Academy, YouTube Transcript, Google Classroom, Notion |
-| Secondary (Class 9–10) | YouTube Transcript, PDF, Google Classroom, Firecrawl |
-| Senior Secondary (11–12) | YouTube Transcript, ArXiv, Telegram, Razorpay |
-| Undergraduate | GitHub, Moodle, Semantic Scholar, Chroma, Slack |
-| Post-Graduate / Research | ArXiv, Scientific Papers, PubMed, Semantic Scholar, Cognee, Qdrant |
-| Competitive (JEE/NEET/UPSC/CAT/GATE) | YouTube Transcript, Firecrawl, Telegram, WhatsApp, Chroma |
-
----
-
-## Build Priority
-
-Build these wrappers in this order (highest impact first):
-
-1. **WhatsApp Business** — #1 parent communication channel in India. Use MSG91 or Gupshup as gateway.
-2. **IndicTrans2 / AI4Bharat** — 22 Indian languages. Free API. Differentiator vs global EdTech.
-3. **Moodle** — Dominant LMS in Indian engineering colleges. REST API is well-documented.
-4. **Razorpay** — Fee gating for paid courses. Simple webhook-based integration.
-5. **Bhashini (ULCA)** — Free government translation API. Covers all scheduled languages.
-
----
-
-## Adding an MCP to an Agent
-
-In the builder UI, drag an MCP connector from the palette onto an agent node.
-Or add it directly to the agent's YAML config:
-
+**Configuration schema (stdio):**
 ```yaml
 mcps:
-  - name: youtube-transcript
+  - name: filesystem
     transport: stdio
-    command: npx -y kimtaeyoon83/mcp-server-youtube-transcript
+    command: "npx -y @modelcontextprotocol/server-filesystem /workspace"
     env: {}
-
-  - name: google-classroom
-    transport: stdio
-    command: npx -y faizan45640/google-classroom-mcp
-    env:
-      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
-      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
-      GOOGLE_REFRESH_TOKEN: "${GOOGLE_REFRESH_TOKEN}"
 ```
 
-All env vars use `${VAR_NAME}` syntax — values come from the generated `.env` file.
+---
+
+### Tier 2 — Smithery-Hosted MCPs (dynamic discovery)
+
+Any MCP server published on [smithery.ai](https://smithery.ai) with `remote: true` can be connected via streamable-http. No local installation needed — Smithery hosts the server for you.
+
+**Configuration schema (streamable-http):**
+```yaml
+mcps:
+  - name: brave
+    transport: streamable-http
+    url: "https://server.smithery.ai/brave/mcp"
+    env:
+      SMITHERY_API_KEY: "${SMITHERY_API_KEY}"
+```
+
+**URL pattern:** `https://server.smithery.ai/{qualifiedName}/mcp`
+
+The `qualifiedName` is the server's registry identifier (e.g. `brave`, `pubmed`, `@modelcontextprotocol/github`). You can find it on the server's Smithery page.
+
+---
+
+## Enabling Live Discovery
+
+Add your Smithery API key to `.env`:
+
+```env
+SMITHERY_API_KEY=your_key_here
+```
+
+Get your key at [smithery.ai/account/api-keys](https://smithery.ai/account/api-keys).
+
+**Without this key**, the designer still works — it only shows the 4 platform MCPs and the LLM uses its training knowledge to configure any additional servers requested.
+
+---
+
+## MCP Selection Philosophy
+
+AgentDock follows a **minimal footprint** principle:
+
+1. **Builtin tools first** — `search_web`, `fetch_url`, `run_code` cover most agent needs without any MCP overhead.
+2. **Platform MCPs second** — filesystem and memory for state management.
+3. **Smithery MCPs last** — only when an agent genuinely requires an external service integration (e.g., sending an email, querying a database API, reading a calendar).
+
+Every MCP added to an agent config increases startup time and adds a new failure point. The designer is instructed to never include MCPs speculatively.
+
+---
+
+## Browsing the Smithery Registry
+
+You can browse all available MCPs at [smithery.ai/servers](https://smithery.ai/servers) or search via the API:
+
+```bash
+curl "https://api.smithery.ai/servers?q=github&pageSize=5" \
+  -H "Authorization: Bearer $SMITHERY_API_KEY"
+```
+
+The response includes the `qualifiedName` you need to build the connection URL.

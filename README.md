@@ -98,7 +98,7 @@ To keep documentation clean and maintainable, AgentDock's user guides are divide
 - **[System Architecture](docs/architecture.md)** — Deep dive into the internal components of the Builder and Standalone Runtime, including the agent generation pipeline rules.
 - **[Development & Extension Guide](docs/development.md)** — Instructions for local development, workspace setups, monorepo directory structures, and the builtin agent tools.
 - **[API Reference Guide](docs/api-reference.md)** — Detailed specification of all Builder API REST endpoints and Runtime WebSocket event schemes.
-- **[Model Context Protocol (MCP) Registry](docs/mcp-registry.md)** — Explanations and lists of the 52 pre-wired and optional Model Context Protocol servers.
+- **[Model Context Protocol (MCP) Registry](docs/mcp-registry.md)** — How AgentDock discovers and connects MCP servers via Smithery, platform MCP configuration, and the two-tier MCP selection model.
 - **[Hardening & Bug Fixes](docs/hardening.md)** — Historic engineering bug reports and resolutions regarding container memory locks, config loader patches, and chunker fixes.
 
 ---

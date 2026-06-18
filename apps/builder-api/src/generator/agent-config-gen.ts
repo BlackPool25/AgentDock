@@ -1,21 +1,13 @@
 import yaml from "js-yaml";
 import type { AgentDesign } from "@agentdock/config-schema";
 
+// Fallback commands for platform MCPs (stdio transport).
+// Smithery-hosted MCPs use streamable-http URLs — they have no command.
 const DEFAULT_MCP_COMMANDS: Record<string, string> = {
   filesystem: "npx -y @modelcontextprotocol/server-filesystem /workspace",
-  "brave-search": "npx -y @modelcontextprotocol/server-brave-search",
-  postgres: "npx -y @modelcontextprotocol/server-postgres",
-  sqlite: "npx -y @modelcontextprotocol/server-sqlite",
   "memory-kg": "npx -y @modelcontextprotocol/server-memory",
-  "web-fetch": "npx -y @modelcontextprotocol/server-fetch",
-  git: "npx -y @modelcontextprotocol/server-git",
-  docker: "npx -y @modelcontextprotocol/server-docker",
   "sequential-thinking": "npx -y @modelcontextprotocol/server-sequential-thinking",
-  "youtube-transcript": "npx -y mcp-server-youtube-transcript",
-  "google-drive": "npx -y google-drive-mcp",
-  gmail: "npx -y google-gmail-mcp",
-  "google-docs": "npx -y google-workspace-mcp",
-  "google-sheets": "npx -y google-workspace-mcp",
+  "web-fetch": "npx -y @modelcontextprotocol/server-fetch",
 };
 
 export function generateAgentConfig(agent: AgentDesign): string {

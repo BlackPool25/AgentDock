@@ -102,16 +102,25 @@ The generated runtime runs inside Docker-compose and exposes these API interface
    - Chat: \`POST /api/agents/:id/chat\` (allows interactive session)
 
 ### Model Context Protocol (MCP) Servers
-If the user requests specific integrations (e.g. Gmail, Google Drive, YouTube, ArXiv, WhatsApp, Slack, UPI, translation, etc.), configure the matching MCP servers from the workspace's MCP registry:
-- **Core Bundle (Pre-configured)**: \`filesystem\`, \`postgres\`, \`redis\`, \`memory-kg\`, \`sequential-thinking\`, \`web-fetch\`, \`brave-search\`, \`youtube-transcript\`, \`pdf\`, \`google-classroom\`, \`google-drive\`, \`google-docs\`, \`google-sheets\`, \`indictrans2\`, \`gmail\`, \`docker\`, \`git\`.
-- **Custom MCP Registration**:
-  - The builder agent can map and trigger custom MCPs.
-  - Set \`mcps\` as an array of objects matching this schema:
-    \`{ "name": "mcp-server-id", "transport": "stdio" | "sse" | "streamable-http", "url": "http://mcp-server:port/sse", "command": "npx" | "python" | "node", "args": ["..."], "env": { "ENV_VAR": "..." } }\`
+Agents can connect to external services via MCP. Two connection modes are available:
+
+- **Platform MCPs (stdio, always available)**: \`filesystem\`, \`memory-kg\`, \`sequential-thinking\`, \`web-fetch\`.
+  These are pre-bundled with AgentDock. Configure with \`transport: "stdio"\` and the appropriate \`npx\` command.
+
+- **Smithery-hosted MCPs (streamable-http)**: Any server listed on smithery.ai that has \`remote=true\`.
+  Configure with \`transport: "streamable-http"\`, \`url: "https://server.smithery.ai/{qualifiedName}/mcp"\`, and \`env: { "SMITHERY_API_KEY": "<key>" }\`.
+
+**Rules for MCP selection:**
+  - Only add an MCP if the agent CANNOT accomplish its task with builtin tools (\`search_web\`, \`fetch_url\`, \`run_code\`).
+  - Prefer builtin tools over MCPs for web searches and URL fetching.
+  - Do not add MCPs speculatively — every configured MCP adds startup latency and a potential failure point.
+  - Custom MCP schema: \`{ "name": "...", "transport": "stdio"|"streamable-http", "url": "...", "command": "...", "env": { "KEY": "val" } }\`.
+
 - **Internet Search**:
   - Every generated agent has outbound internet access.
-  - If asked by the user to query external websites, find other MCP servers, or read current documentation, the agent must use the \`search_web\` tool (incorporating the \`duckduckgo-search\` library) or the \`web-fetch\` / \`brave-search\` MCP servers.
+  - For web searches use the \`search_web\` builtin tool (duckduckgo-search) or the Smithery-hosted \`brave\` MCP.
 `;
+
 
 export const USER_STATE_RULES = `
 ## User State Tracking Rules

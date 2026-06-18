@@ -45,7 +45,7 @@ agentdock/
 │   └── agent-runtime/         # Python + FastAPI agent container (memory, RAG, and tools)
 ├── packages/
 │   ├── config-schema/         # Shared Zod validation schemas
-│   ├── mcp-registry/          # Registry of 52 Model Context Protocol definitions
+│   ├── mcp-registry/          # Platform MCPs + Smithery registry search integration
 │   └── shared-types/          # Shared TypeScript type definitions
 ├── configs/                   # Example system configurations
 └── docker/                    # Docker Compose orchestrations for builder services
