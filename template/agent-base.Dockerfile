@@ -12,6 +12,13 @@ RUN apt-get update && apt-get install -y \
 # Create non-root user for restricted shell agents
 RUN useradd -m -s /bin/bash agentdock
 
+# Install Node.js 20.x (required for MCP stdio servers via npx)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /home/agentdock/.npm && \
+    chown -R agentdock:agentdock /home/agentdock/.npm
+
 # Install uv (Python package manager)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"

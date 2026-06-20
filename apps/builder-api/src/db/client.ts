@@ -10,5 +10,7 @@ mkdirSync(dirname(dbPath), { recursive: true });
 const sqlite = new Database(dbPath);
 sqlite.exec("PRAGMA journal_mode = WAL;");
 sqlite.exec("PRAGMA foreign_keys = ON;");
+sqlite.exec("PRAGMA wal_autocheckpoint = 100;");
+sqlite.exec("PRAGMA wal_checkpoint(TRUNCATE);");
 
 export const db = drizzle(sqlite, { schema });

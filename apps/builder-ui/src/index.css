@@ -6,18 +6,18 @@
 
 @layer base {
   :root {
-    --background: 48 18% 97%;
-    --foreground: 222 47% 11.2%;
-    --card: 48 30% 99%;
-    --card-foreground: 222 47% 11.2%;
-    --primary: 263 70% 50%;
-    --primary-foreground: 48 18% 97%;
-    --muted: 48 15% 93%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --border: 48 12% 90%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --radius: 0.5rem;
+    --background: 0 0% 98%;
+    --foreground: 150 15% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 150 15% 15%;
+    --primary: 152 60% 35%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 150 20% 95%;
+    --muted-foreground: 150 10% 45%;
+    --border: 150 20% 88%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --radius: 0.75rem;
   }
 
   * { @apply border-border; }
@@ -27,17 +27,18 @@
 
 /* Input utility */
 .input {
-  @apply w-full px-3 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground
+  @apply w-full px-3 py-1.5 rounded-lg border border-border text-sm text-foreground
     focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors;
+  background: hsl(0 0% 100%);
 }
 
 /* React Flow overrides */
-.react-flow__background { background-color: #F5F4EF; }
-.react-flow__edge-path { stroke: hsl(263 70% 50%); }
+.react-flow__background { background-color: hsl(150 20% 95%); }
+.react-flow__edge-path { stroke: hsl(152 60% 35%); }
 .react-flow__handle {
   width: 10px;
   height: 10px;
-  background: hsl(263 70% 50%);
+  background: hsl(152 60% 35%);
   border: 2px solid hsl(0 0% 100%);
 }
 .react-flow__node:focus-visible {
@@ -45,4 +46,17 @@
 }
 .react-flow__node.selected {
   box-shadow: none !important;
+}
+
+/* Card styling */
+.builder-card {
+  background: hsl(0 0% 100%);
+  border: 1px solid hsl(150 20% 88%);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+.builder-card:hover {
+  border-color: hsl(152 60% 65%);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08);
 }

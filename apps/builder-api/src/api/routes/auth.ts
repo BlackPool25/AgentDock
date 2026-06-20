@@ -21,9 +21,9 @@ authRoutes.post(
     const token = await new SignJWT({ sub: "admin", email })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
-      .setExpirationTime("7d")
+      .setExpirationTime("30d")
       .sign(JWT_SECRET);
-    return c.json<LoginResponse>({ token, expiresIn: 604800 });
+    return c.json<LoginResponse>({ token, expiresIn: 2592000 });
   }
 );
 

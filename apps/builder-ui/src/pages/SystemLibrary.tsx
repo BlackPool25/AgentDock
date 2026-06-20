@@ -68,21 +68,22 @@ export function SystemLibrary() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold">System Library</h1>
-          <p className="text-sm text-muted-foreground mt-1">Design, save, and generate multi-agent systems</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">System Library</h1>
+          <p className="text-sm mt-1 text-muted-foreground">Design, save, and generate multi-agent systems</p>
         </div>
         <button
           onClick={() => setCreating(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-sm"
+          style={{ background: 'linear-gradient(135deg, hsl(152 60% 35%), hsl(160 80% 30%))' }}
         >
           <Plus className="w-4 h-4" /> New System
         </button>
       </div>
 
       {/* Search and Sort controls */}
-      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between mb-8 border-b border-border pb-4">
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between mb-8 pb-4 border-b border-border">
         <input
           type="text"
           placeholder="Search systems by name or description…"
@@ -95,7 +96,7 @@ export function SystemLibrary() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
-            className="input text-xs px-3 py-1.5 w-32 cursor-pointer font-semibold bg-background"
+            className="input text-xs px-3 py-1.5 w-32 cursor-pointer font-semibold"
           >
             <option value="date">Last Saved</option>
             <option value="name">Name</option>
@@ -105,8 +106,8 @@ export function SystemLibrary() {
       </div>
 
       {creating && (
-        <div className="mb-6 p-4 rounded-lg border border-primary/20 bg-card shadow-sm">
-          <p className="text-sm font-medium mb-3">New System</p>
+        <div className="mb-6 p-5 rounded-2xl border bg-card shadow-sm" style={{ borderColor: 'hsl(152 60% 70%)' }}>
+          <p className="text-sm font-bold mb-3 text-foreground">New System</p>
           <div className="flex gap-2">
             <input
               autoFocus
@@ -122,11 +123,12 @@ export function SystemLibrary() {
             <button
               onClick={() => newName.trim() && createMutation.mutate(newName.trim())}
               disabled={!newName.trim() || createMutation.isPending}
-              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 transition-opacity"
+              className="px-4 py-2 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 shadow-sm"
+              style={{ background: 'linear-gradient(135deg, hsl(152 60% 35%), hsl(160 80% 30%))' }}
             >
               Create
             </button>
-            <button onClick={() => setCreating(false)} className="px-4 py-2 rounded-lg border border-border text-sm font-semibold hover:bg-muted transition-colors">
+            <button onClick={() => setCreating(false)} className="px-4 py-2 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:bg-muted transition-colors">
               Cancel
             </button>
           </div>
@@ -134,14 +136,14 @@ export function SystemLibrary() {
       )}
 
       {isLoading ? (
-        <div className="text-center py-16 text-muted-foreground italic">Loading…</div>
+        <div className="text-center py-16 italic text-muted-foreground">Loading…</div>
       ) : filteredSystems.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-border rounded-xl bg-card">
+        <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-card">
           <Bot className="w-12 h-12 text-muted-foreground mx-auto mb-4 animate-pulse" />
-          <p className="text-muted-foreground font-medium">No matching systems found.</p>
+          <p className="font-medium text-muted-foreground">No matching systems found.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredSystems.map((system) => (
             <SystemCard
               key={system.id}
@@ -163,8 +165,8 @@ export function SystemLibrary() {
       )}
 
       {deleteTarget && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 p-4">
-          <div className="bg-card border border-border p-6 rounded-xl shadow-xl w-full max-w-sm">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/30">
+          <div className="p-6 rounded-2xl w-full max-w-sm bg-card border border-border shadow-xl">
             <h3 className="text-lg font-bold text-foreground mb-2">Delete System</h3>
             <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
               Are you sure you want to delete <span className="font-semibold text-foreground">"{deleteTarget.name}"</span>? This action cannot be undone.
@@ -172,7 +174,7 @@ export function SystemLibrary() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setDeleteTarget(null)}
-                className="px-4 py-2 text-sm font-semibold rounded-lg border border-border hover:bg-muted transition-colors"
+                className="px-4 py-2 text-sm font-semibold rounded-xl border border-border text-muted-foreground hover:bg-muted transition-colors"
               >
                 Cancel
               </button>
@@ -182,7 +184,8 @@ export function SystemLibrary() {
                   setDeleteTarget(null);
                 }}
                 disabled={deleteMutation.isPending}
-                className="px-4 py-2 text-sm font-semibold rounded-lg bg-destructive text-destructive-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
+                className="px-4 py-2 text-sm font-semibold rounded-xl text-white transition-all disabled:opacity-50"
+                style={{ background: 'hsl(0 70% 50%)' }}
               >
                 Delete
               </button>
@@ -214,20 +217,21 @@ function SystemCard({
   });
 
   return (
-    <div className="p-5 rounded-xl border border-border bg-card hover:shadow-md hover:bg-muted/10 transition-all flex flex-col justify-between min-h-[160px]">
+    <div className="builder-card flex flex-col justify-between">
       <div>
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0 pr-2">
             <h3 className="font-bold text-foreground truncate" title={system.name}>{system.name}</h3>
             {system.description && system.description !== "test" ? (
-              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">{system.description}</p>
+              <p className="text-xs leading-relaxed mt-0.5 line-clamp-2 text-muted-foreground">{system.description}</p>
             ) : (
-              <p className="text-xs text-muted-foreground/50 italic mt-0.5 line-clamp-2 leading-relaxed">No description added</p>
+              <p className="text-xs italic mt-0.5 line-clamp-2 leading-relaxed text-muted-foreground/50">No description added</p>
             )}
           </div>
           <span
-            className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0 cursor-help"
+            className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 cursor-help"
             title="System version (auto-increments on save)"
+            style={{ background: 'hsl(152 60% 45% / 0.12)', color: 'hsl(152 60% 30%)' }}
           >
             v{system.version}
           </span>
@@ -246,23 +250,24 @@ function SystemCard({
         </div>
       </div>
 
-      <div className="flex gap-2 border-t border-border/50 pt-3">
+      <div className="flex gap-2 pt-3 border-t border-border">
         <button
           onClick={onEdit}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted transition-colors"
+          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-semibold border border-border text-muted-foreground hover:bg-muted transition-colors"
         >
           <Edit2 className="w-3 h-3" /> Edit
         </button>
         <button
           onClick={onGenerate}
           disabled={generating}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs hover:opacity-90 disabled:opacity-50 transition-opacity"
+          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-50 shadow-sm"
+          style={{ background: 'linear-gradient(135deg, hsl(152 60% 35%), hsl(160 80% 30%))' }}
         >
           <Download className="w-3 h-3" /> {generating ? "Generating…" : "Generate"}
         </button>
         <button
           onClick={onDelete}
-          className="p-1.5 rounded-lg border border-border text-destructive hover:border-destructive/50 transition-colors"
+          className="p-1.5 rounded-xl border border-border text-destructive hover:bg-muted transition-colors"
         >
           <Trash2 className="w-3 h-3" />
         </button>

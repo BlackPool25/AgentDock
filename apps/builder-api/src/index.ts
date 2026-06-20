@@ -19,6 +19,7 @@ if (existsSync(rootEnvPath)) {
 }
 
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { cors } from "hono/cors";
 import { jwt } from "hono/jwt";
 import { logger } from "./logger.js";
@@ -71,6 +72,7 @@ app.post("/api/auth/login", (c) => authRoutes.fetch(new Request(new URL("/login"
 // In Hono, app.use middleware applies to routes registered AFTER it.
 // Register JWT middleware before the protected routes.
 app.use("/api/auth/me", jwtMiddleware);
+app.use("/api/auth/refresh", jwtMiddleware);
 app.use("/api/systems/*", jwtMiddleware);
 app.use("/api/ollama/*", jwtMiddleware);
 app.use("/api/gemini/*", jwtMiddleware);
@@ -80,6 +82,19 @@ app.get("/api/auth/me", async (c) => {
   const payload = c.get("jwtPayload") as { sub: string; email: string } | undefined;
   if (!payload) return c.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, 401);
   return c.json({ sub: payload.sub, email: payload.email });
+});
+
+app.post("/api/auth/refresh", async (c) => {
+  const payload = c.get("jwtPayload") as { sub: string; email: string } | undefined;
+  if (!payload) return c.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, 401);
+  const { SignJWT } = await import("jose");
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? "dev-secret-min-32-chars-long-here");
+  const token = await new SignJWT({ sub: payload.sub, email: payload.email })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("30d")
+    .sign(secret);
+  return c.json({ token, expiresIn: 2592000 });
 });
 
 app.get("/api/llm/config", (c) => {
@@ -144,6 +159,9 @@ app.route("/api/systems", describeRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.onError((err, c) => {
+  if (err instanceof HTTPException) {
+    return err.getResponse();
+  }
   logger.error({ err: err.message }, "Unhandled error");
   return c.json({ error: err.message, code: "INTERNAL_ERROR" }, 500);
 });

@@ -299,7 +299,7 @@ async function buildMCPContext(description: string): Promise<string> {
       const url = smitheryServerUrl(s.qualifiedName);
       const badge = s.verified ? " ✓" : "";
       if (s.remote && s.isDeployed) {
-        return `- ${s.qualifiedName}: ${s.displayName}${badge} — ${s.description.slice(0, 120)}\n  → transport: "streamable-http", url: "${url}", env: { "SMITHERY_API_KEY": "<your key>" }`;
+        return `- ${s.qualifiedName}: ${s.displayName}${badge} — ${s.description.slice(0, 120)}\n  → transport: "streamable-http", url: "${url}", env: { "SMITHERY_API_KEY": "\${SMITHERY_API_KEY}" }`;
       }
       // Non-hosted server — LLM should not include unless user has explicit setup
       return `- ${s.qualifiedName}: ${s.displayName}${badge} — ${s.description.slice(0, 120)}\n  → self-hosted (not available on Smithery cloud)`;
@@ -318,7 +318,7 @@ async function buildMCPContext(description: string): Promise<string> {
 
 CONFIGURATION RULES:
 - stdio MCPs: set transport="stdio", command="<npx command>", leave url empty.
-- streamable-http (Smithery) MCPs: set transport="streamable-http", url="<url>", env={"SMITHERY_API_KEY":"<your key>"}, leave command empty.
+- streamable-http (Smithery) MCPs: set transport="streamable-http", url="<url>", env={"SMITHERY_API_KEY":"\${SMITHERY_API_KEY}"}, leave command empty.
 - Include an MCP only if the agent CANNOT do its job without that external integration.
 - DO NOT add MCPs just because they sound related — prioritize builtin tools first.
 

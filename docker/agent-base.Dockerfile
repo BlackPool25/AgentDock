@@ -6,8 +6,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
     python3 python3-pip curl wget git ffmpeg \
-    build-essential jq unzip ca-certificates \
+    build-essential jq unzip ca-certificates sudo \
     && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for restricted shell agents
+RUN useradd -m -s /bin/bash agentdock
+
+# Install Node.js 20.x (required for MCP stdio servers via npx)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /home/agentdock/.npm && \
+    chown -R agentdock:agentdock /home/agentdock/.npm
 
 # Install uv (Python package manager)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -22,12 +32,15 @@ RUN uv sync --no-dev 2>/dev/null || uv sync
 
 COPY apps/agent-runtime/app ./app
 
-# Create required directories
-RUN mkdir -p /memory /storage/received /workspace
+# Create required directories and set up memory git repo
+RUN mkdir -p /memory /storage/received /workspace && \
+    git init /memory && \
+    git -C /memory config user.email "agent@agentdock" && \
+    git -C /memory config user.name "AgentDock" && \
+    chown -R agentdock:agentdock /app /memory /storage /workspace && \
+    chmod -R 777 /memory /storage /workspace
 
-# Git config for memory commits
-RUN git config --global user.email "agent@agentdock" && \
-    git config --global user.name "AgentDock"
+USER agentdock
 
 HEALTHCHECK --interval=5s --timeout=3s --retries=10 \
   CMD curl -f http://localhost:8080/health || exit 1
